@@ -392,9 +392,9 @@ export default function AuthModal({ isOpen, onClose }) {
                 {isAdminPortal && (
                   <div className="pt-2">
                     <div className="relative flex py-2 items-center">
-                      <div className="flex-grow border-t border-slate-200" />
+                      <div className="grow border-t border-slate-200" />
                       <span className="shrink mx-2 text-[10px] text-slate-400 uppercase font-bold">Fast Access</span>
-                      <div className="flex-grow border-t border-slate-200" />
+                      <div className="grow border-t border-slate-200" />
                     </div>
                     <button
                       type="button"
