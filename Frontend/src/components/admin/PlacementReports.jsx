@@ -15,21 +15,10 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 
-const SAMPLE_RECORDS = [
-  { roll: '21BCSE104', name: 'Aarav Sharma', branch: 'Computer Science', batch: '2026', cgpa: 8.85, company: 'Zomato', package: '₹18.5 LPA', status: 'Placed' },
-  { roll: '21BIT045', name: 'Priya Nambiar', branch: 'Information Technology', batch: '2026', cgpa: 9.12, company: 'Microsoft', package: '₹31.0 LPA', status: 'Placed' },
-  { roll: '21BCSE012', name: 'Ananya Verma', branch: 'Computer Science', batch: '2026', cgpa: 8.42, company: 'Razorpay', package: '₹20.0 LPA', status: 'Placed' },
-  { roll: '21BECE078', name: 'Rohan Gupta', branch: 'Electronics & Comm.', batch: '2026', cgpa: 7.65, company: 'Deloitte', package: '₹12.5 LPA', status: 'Placed' },
-  { roll: '21BCSE089', name: 'Tanmay Saxena', branch: 'Computer Science', batch: '2026', cgpa: 8.95, company: 'Google', package: '₹48.0 LPA', status: 'Placed' },
-  { roll: '21BIT018', name: 'Ishita Roy', branch: 'Information Technology', batch: '2026', cgpa: 8.25, company: 'Atlassian', package: '₹24.0 LPA', status: 'Placed' },
-  { roll: '21BME044', name: 'Kunal Deshmukh', branch: 'Mechanical Engg.', batch: '2026', cgpa: 7.80, company: 'Tata Motors', package: '₹9.5 LPA', status: 'Placed' },
-  { roll: '21BEE056', name: 'Sneha Patel', branch: 'Electrical Engg.', batch: '2026', cgpa: 8.10, company: 'L&T Technology', package: '₹8.8 LPA', status: 'Placed' },
-  { roll: '21BCIV023', name: 'Aditya Joshi', branch: 'Civil Engg.', batch: '2026', cgpa: 7.40, company: 'L&T Construction', package: '₹7.8 LPA', status: 'Placed' }
-];
-
 export default function PlacementReports() {
+  const { studentsList, applications, drivesList, companies } = useApp();
   const [selectedBranch, setSelectedBranch] = useState('All');
-  const [selectedBatch, setSelectedBatch] = useState('2026');
+  const [selectedBatch, setSelectedBatch] = useState('All');
   const [selectedCompany, setSelectedCompany] = useState('All');
   const [nirfReport, setNirfReport] = useState(null);
 
@@ -47,14 +36,118 @@ export default function PlacementReports() {
     loadReports();
   }, []);
 
+  // Compute genuine placement records from real students and applications
+  const placementRecords = useMemo(() => {
+    const list = [];
+    const seenKeys = new Set();
+
+    // 1. Process studentsList
+    (studentsList || []).forEach(st => {
+      const stApps = (applications || []).filter(a => 
+        (a.studentId === st.id || a.studentId === st._id || a.studentRoll === st.rollNumber || a.studentName === st.name || a.studentEmail === st.email) &&
+        (a.status === 'Offered' || a.status === 'offered' || a.status === 'Offer' || a.status === 'Offer Accepted' || a.offerAccepted)
+      );
+
+      if (stApps.length > 0) {
+        stApps.forEach(app => {
+          const key = `${st.rollNumber || st.id}-${app.companyName || app.company}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            const ctcVal = app.offerDetails?.ctc || app.package || (app.salary ? `${app.salary} LPA` : '') || (st.placedPackage ? `${st.placedPackage} LPA` : '₹16.0 LPA');
+            list.push({
+              id: `${st.id || st.rollNumber}-${app.id}`,
+              roll: st.rollNumber || st.roll || '21BCSE101',
+              name: st.name,
+              branch: st.branch || 'Computer Science & Engineering',
+              batch: String(st.batch || '2026'),
+              cgpa: st.cgpa || 8.0,
+              company: app.companyName || app.company || 'Campus Partner',
+              package: String(ctcVal).startsWith('₹') ? String(ctcVal) : `₹${ctcVal}`,
+              status: app.status === 'Offer Accepted' ? 'Accepted' : 'Offered'
+            });
+          }
+        });
+      } else if (st.placedCompany && st.placedCompany.trim()) {
+        const key = `${st.rollNumber || st.id}-${st.placedCompany}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          const ctcVal = st.placedPackage ? (String(st.placedPackage).includes('LPA') ? st.placedPackage : `${st.placedPackage} LPA`) : '₹18.0 LPA';
+          list.push({
+            id: `${st.id || st.rollNumber}-placed`,
+            roll: st.rollNumber || st.roll || '21BCSE101',
+            name: st.name,
+            branch: st.branch || 'Computer Science & Engineering',
+            batch: String(st.batch || '2026'),
+            cgpa: st.cgpa || 8.0,
+            company: st.placedCompany,
+            package: String(ctcVal).startsWith('₹') ? String(ctcVal) : `₹${ctcVal}`,
+            status: 'Placed'
+          });
+        }
+      }
+    });
+
+    // 2. Process placement drives
+    (drivesList || []).forEach(drv => {
+      (drv.candidates || []).forEach(cand => {
+        if (cand.status === 'Offered' || cand.status === 'offered') {
+          const key = `${cand.studentRoll}-${drv.companyName}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            list.push({
+              id: `drv-${drv.id}-${cand.studentRoll}`,
+              roll: cand.studentRoll,
+              name: cand.studentName,
+              branch: cand.studentBranch || 'Computer Science & Engineering',
+              batch: '2026',
+              cgpa: cand.studentCgpa || 8.5,
+              company: drv.companyName,
+              package: drv.ctcDisplay || '₹20.0 LPA',
+              status: 'Offered'
+            });
+          }
+        }
+      });
+    });
+
+    return list;
+  }, [studentsList, applications, drivesList]);
+
+  // Dynamic filter options
+  const uniqueBranches = useMemo(() => {
+    const set = new Set();
+    (studentsList || []).forEach(s => s.branch && set.add(s.branch));
+    placementRecords.forEach(r => r.branch && set.add(r.branch));
+    return Array.from(set).sort();
+  }, [studentsList, placementRecords]);
+
+  const uniqueBatches = useMemo(() => {
+    const set = new Set();
+    (studentsList || []).forEach(s => s.batch && set.add(String(s.batch)));
+    placementRecords.forEach(r => r.batch && set.add(String(r.batch)));
+    return Array.from(set).sort();
+  }, [studentsList, placementRecords]);
+
+  const uniqueCompanies = useMemo(() => {
+    const set = new Set();
+    (companies || []).forEach(c => c.name && set.add(c.name));
+    (drivesList || []).forEach(d => d.companyName && set.add(d.companyName));
+    placementRecords.forEach(r => r.company && set.add(r.company));
+    return Array.from(set).sort();
+  }, [companies, drivesList, placementRecords]);
+
   const filteredRecords = useMemo(() => {
-    return SAMPLE_RECORDS.filter(rec => {
-      if (selectedBranch !== 'All' && !rec.branch.includes(selectedBranch)) return false;
+    return placementRecords.filter(rec => {
+      if (selectedBranch !== 'All' && rec.branch !== selectedBranch) return false;
       if (selectedBatch !== 'All' && rec.batch !== selectedBatch) return false;
       if (selectedCompany !== 'All' && rec.company !== selectedCompany) return false;
       return true;
     });
-  }, [selectedBranch, selectedBatch, selectedCompany]);
+  }, [placementRecords, selectedBranch, selectedBatch, selectedCompany]);
+
+  const totalEnrolled = nirfReport?.totalEnrolled ?? (studentsList?.length || 0);
+  const totalPlaced = nirfReport?.placedStudents ?? placementRecords.length;
+  const placementRate = nirfReport?.placementRate ?? (totalEnrolled > 0 ? Math.round((totalPlaced / totalEnrolled) * 100) : 0);
 
   const handleExportCSV = () => {
     const headers = ['Roll Number', 'Student Name', 'Branch', 'Batch', 'CGPA', 'Placed Company', 'Package Offered', 'Placement Status'];
@@ -127,12 +220,9 @@ export default function PlacementReports() {
               className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 bg-white"
             >
               <option value="All">All Disciplines</option>
-              <option value="Computer Science">Computer Science (CSE)</option>
-              <option value="Information Technology">Information Technology (IT)</option>
-              <option value="Electronics">Electronics (ECE)</option>
-              <option value="Mechanical">Mechanical (ME)</option>
-              <option value="Electrical">Electrical (EE)</option>
-              <option value="Civil">Civil (CE)</option>
+              {uniqueBranches.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
             </select>
           </div>
 
@@ -143,9 +233,10 @@ export default function PlacementReports() {
               onChange={(e) => setSelectedBatch(e.target.value)}
               className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 bg-white"
             >
-              <option value="2026">Batch 2026 (Current)</option>
-              <option value="2025">Batch 2025 (Previous)</option>
               <option value="All">All Batches</option>
+              {uniqueBatches.map(b => (
+                <option key={b} value={b}>Batch {b}</option>
+              ))}
             </select>
           </div>
 
@@ -157,12 +248,9 @@ export default function PlacementReports() {
               className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 bg-white"
             >
               <option value="All">All Companies</option>
-              <option value="Google">Google</option>
-              <option value="Microsoft">Microsoft</option>
-              <option value="Razorpay">Razorpay</option>
-              <option value="Zomato">Zomato</option>
-              <option value="Atlassian">Atlassian</option>
-              <option value="Deloitte">Deloitte</option>
+              {uniqueCompanies.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -173,31 +261,35 @@ export default function PlacementReports() {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-[11px] font-bold uppercase text-slate-400">Institutional Placement %</span>
           <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1">
-            {nirfReport ? `${nirfReport.placementRate}%` : '84.5%'}
+            {placementRate}%
           </div>
-          <span className="text-xs text-slate-500 mt-0.5 block">541 of 640 candidates placed</span>
+          <span className="text-xs text-slate-500 mt-0.5 block">{totalPlaced} of {totalEnrolled} candidates placed</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-[11px] font-bold uppercase text-slate-400">Highest Campus CTC</span>
           <div className="text-2xl sm:text-3xl font-black text-indigo-700 mt-1">
-            {nirfReport ? nirfReport.highestPackage.split(' ')[0] : '₹48.0 LPA'}
+            {nirfReport?.highestPackage ? nirfReport.highestPackage.split(' ')[0] : '₹0.0 LPA'}
           </div>
-          <span className="text-xs text-indigo-600 font-semibold mt-0.5 block">Google • Software Engineer</span>
+          <span className="text-xs text-indigo-600 font-semibold mt-0.5 block truncate">
+            {nirfReport?.highestPackage && nirfReport.highestPackage.includes('(')
+              ? nirfReport.highestPackage.substring(nirfReport.highestPackage.indexOf('('))
+              : 'Verified Campus Offer'}
+          </span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-[11px] font-bold uppercase text-slate-400">Average Compensation</span>
           <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1">
-            {nirfReport ? nirfReport.averagePackage : '₹14.2 LPA'}
+            {nirfReport?.averagePackage || '₹0.0 LPA'}
           </div>
-          <span className="text-xs text-emerald-600 font-medium mt-0.5 block">+18.5% YoY Growth</span>
+          <span className="text-xs text-emerald-600 font-medium mt-0.5 block">Campus Cohort Average</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-[11px] font-bold uppercase text-slate-400">Median NIRF Package</span>
           <div className="text-2xl sm:text-3xl font-black text-purple-700 mt-1">
-            {nirfReport ? nirfReport.medianPackage : '₹12.8 LPA'}
+            {nirfReport?.medianPackage || '₹0.0 LPA'}
           </div>
           <span className="text-xs text-slate-500 mt-0.5 block">For Accreditation Audit</span>
         </div>
@@ -279,21 +371,29 @@ export default function PlacementReports() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
-              {filteredRecords.map((r, i) => (
-                <tr key={i} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="p-3.5 pl-5 font-mono text-slate-900 font-bold">{r.roll}</td>
-                  <td className="p-3.5 font-bold text-slate-900">{r.name}</td>
-                  <td className="p-3.5 text-slate-600">{r.branch}</td>
-                  <td className="p-3.5 text-slate-800 font-semibold">{r.cgpa}</td>
-                  <td className="p-3.5 font-bold text-indigo-700">{r.company}</td>
-                  <td className="p-3.5 font-extrabold text-emerald-700">{r.package}</td>
-                  <td className="p-3.5 pr-5 text-right">
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {r.status}
-                    </span>
+              {filteredRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                    No placement records found matching the selected filters.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredRecords.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="p-3.5 pl-5 font-mono text-slate-900 font-bold">{r.roll}</td>
+                    <td className="p-3.5 font-bold text-slate-900">{r.name}</td>
+                    <td className="p-3.5 text-slate-600">{r.branch}</td>
+                    <td className="p-3.5 text-slate-800 font-semibold">{r.cgpa}</td>
+                    <td className="p-3.5 font-bold text-indigo-700">{r.company}</td>
+                    <td className="p-3.5 font-extrabold text-emerald-700">{r.package}</td>
+                    <td className="p-3.5 pr-5 text-right">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {r.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

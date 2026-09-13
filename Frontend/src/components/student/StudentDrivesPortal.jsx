@@ -13,17 +13,22 @@ import {
   Sparkles, 
   FileText,
   ShieldCheck,
+  ShieldAlert,
   Loader2,
-  Ticket
+  Ticket,
+  Code2
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { checkCandidateEligibility } from '../../utils/eligibilityHelper';
 import DrivePassModal from './DrivePassModal';
+import TestSandboxModal from './TestSandboxModal';
 
-export default function StudentDrivesPortal() {
-  const { student, drivesList, setDrivesList, showToast } = useApp();
+export default function StudentDrivesPortal({ onNavigate }) {
+  const { student, drivesList, setDrivesList, showToast, assessments, eligibilityPolicy, applications } = useApp();
   const [selectedPass, setSelectedPass] = useState(null);
   const [isPassModalOpen, setIsPassModalOpen] = useState(false);
   const [registeringDriveId, setRegisteringDriveId] = useState(null);
+  const [takingAssessment, setTakingAssessment] = useState(null);
 
   // Sync drives from backend
   useEffect(() => {
@@ -40,36 +45,29 @@ export default function StudentDrivesPortal() {
     loadDrives();
   }, []);
 
-  // Determine eligibility for a given drive
+  // Determine synchronized eligibility for a given drive (College Policy strictly takes precedence)
   const checkEligibility = (drive) => {
-    const criteria = drive.eligibilityCriteria || {};
-    const minCgpa = criteria.minCgpa ?? 7.0;
-    const maxBacklogs = criteria.maxBacklogs ?? 0;
-    const allowedBranches = criteria.allowedBranches || [];
-    const eligibleBatch = criteria.eligibleBatch || '2026';
-
-    const cgpaOk = (student.cgpa || 8.5) >= minCgpa;
-    const backlogsOk = (student.backlogs || 0) <= maxBacklogs;
-    const branchOk = allowedBranches.length === 0 || allowedBranches.some(b => 
-      (student.branch || '').toLowerCase().includes(b.toLowerCase()) ||
-      b.toLowerCase().includes((student.branch || '').toLowerCase())
-    );
-    const batchOk = !eligibleBatch || student.batch === eligibleBatch;
-    const notBlocked = !student.isBlocked;
-
-    const isEligible = cgpaOk && backlogsOk && branchOk && batchOk && notBlocked;
-
-    const reasons = [];
-    if (!cgpaOk) reasons.push(`Min CGPA required: ${minCgpa} (Yours: ${student.cgpa})`);
-    if (!backlogsOk) reasons.push(`Max backlogs: ${maxBacklogs} (Yours: ${student.backlogs})`);
-    if (!branchOk) reasons.push(`Discipline not eligible`);
-    if (!batchOk) reasons.push(`Eligible for Class of ${eligibleBatch}`);
-    if (!notBlocked) reasons.push(`Account under disciplinary hold`);
-
-    return { isEligible, reasons };
+    return checkCandidateEligibility({
+      student,
+      companyRequirement: drive.eligibilityCriteria || {},
+      collegePolicy: eligibilityPolicy,
+      userApplications: applications
+    });
   };
 
   const handleRegister = async (drive) => {
+    const evalResult = checkEligibility(drive);
+    if (!evalResult.isEligible) {
+      if (showToast) {
+        if (!evalResult.passesCollege) {
+          showToast(`Ineligible under College Directorate Policy: ${evalResult.collegeReasons.join(', ')}`);
+        } else {
+          showToast(`Ineligible for ${drive.companyName}: ${evalResult.companyReasons.join(', ')}`);
+        }
+      }
+      return;
+    }
+
     setRegisteringDriveId(drive.id);
     try {
       const studentData = {
@@ -77,7 +75,8 @@ export default function StudentDrivesPortal() {
         rollNumber: student.rollNumber,
         branch: student.branch,
         cgpa: student.cgpa,
-        batch: student.batch
+        batch: student.batch,
+        backlogs: student.backlogs || 0
       };
 
       const res = await api.registerForDrive(drive.id, studentData);
@@ -174,7 +173,16 @@ export default function StudentDrivesPortal() {
       {/* Drives Grid */}
       <div className="space-y-4">
         {drivesList.map((drive) => {
-          const { isEligible, reasons } = checkEligibility(drive);
+          const { 
+            isEligible, 
+            passesCollege, 
+            passesCompany, 
+            collegeReasons, 
+            companyReasons, 
+            reasons, 
+            effectiveMinCgpa, 
+            effectiveMaxBacklogs 
+          } = checkEligibility(drive);
           const candidates = drive.candidates || [];
           const myRegistration = candidates.find(c => 
             c.studentRoll === student.rollNumber || c.studentName === student.name
@@ -245,11 +253,25 @@ export default function StudentDrivesPortal() {
                   ]).map((phaseName, pIdx) => {
                     const isPast = pIdx < currentPhaseIdx;
                     const isCurrent = pIdx === currentPhaseIdx;
+                    const isOaPhase = phaseName.toLowerCase().includes('assessment') || phaseName.toLowerCase().includes('oa');
 
                     return (
                       <div
                         key={pIdx}
+                        onClick={() => {
+                          if (isRegistered && isOaPhase && (isCurrent || isPast)) {
+                            const matched = assessments?.find(as => 
+                              as.companyName?.toLowerCase().includes(drive.companyName?.toLowerCase()) ||
+                              drive.companyName?.toLowerCase().includes(as.companyName?.toLowerCase())
+                            ) || assessments?.[0];
+                            if (matched) setTakingAssessment(matched);
+                            else if (onNavigate) onNavigate('assessments');
+                          }
+                        }}
+                        title={isRegistered && isOaPhase ? 'Click to Launch OA Sandbox' : undefined}
                         className={`p-2.5 rounded-xl border text-center transition-all ${
+                          isRegistered && isOaPhase && (isCurrent || isPast) ? 'cursor-pointer hover:scale-[1.02] hover:border-amber-400' : ''
+                        } ${
                           isCurrent
                             ? 'bg-purple-600 text-white border-purple-600 shadow-md font-bold'
                             : isPast
@@ -265,32 +287,66 @@ export default function StudentDrivesPortal() {
                 </div>
               </div>
 
-              {/* Eligibility Bar & Action */}
+              {/* Synchronized Eligibility Bar & Action */}
               <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="text-xs">
+                <div className="text-xs flex-1">
                   {isEligible ? (
                     <div className="flex items-center gap-1.5 text-emerald-700 font-bold">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Criteria Met: CGPA {student.cgpa} &ge; {drive.eligibilityCriteria?.minCgpa || 7.0} • 0 Backlogs</span>
+                      <span>Verified Eligible: CGPA {student.cgpa} &ge; {effectiveMinCgpa || 7.0} • College Policy & Company Criteria Met</span>
+                    </div>
+                  ) : !passesCollege ? (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-rose-900">
+                        <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>University Placement Directorate Policy Restriction (Overrides Company Criteria)</span>
+                      </div>
+                      <p className="text-[11px] text-rose-700">
+                        {collegeReasons.join(' • ')}
+                      </p>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 text-amber-700 font-semibold">
-                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>{reasons.join(' • ')}</span>
+                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Company Cutoff Criteria Not Met</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700">
+                        {companyReasons.join(' • ')}
+                      </p>
                     </div>
                   )}
                 </div>
 
-                <div>
+                <div className="shrink-0">
                   {isRegistered ? (
-                    <button
-                      type="button"
-                      onClick={() => handleViewPass(drive, myRegistration)}
-                      className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Ticket className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>View Placement Hall Ticket</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(drive.currentPhase === 'Online Assessment' || drive.currentPhase?.toLowerCase().includes('assessment') || drive.currentPhase?.toLowerCase().includes('oa')) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const matched = assessments?.find(as => 
+                              as.companyName?.toLowerCase().includes(drive.companyName?.toLowerCase()) ||
+                              drive.companyName?.toLowerCase().includes(as.companyName?.toLowerCase())
+                            ) || assessments?.[0];
+                            if (matched) setTakingAssessment(matched);
+                            else if (onNavigate) onNavigate('assessments');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-600/20"
+                        >
+                          <Code2 className="w-3.5 h-3.5" />
+                          <span>Start OA Round Test</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleViewPass(drive, myRegistration)}
+                        className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Ticket className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>View Placement Hall Ticket</span>
+                      </button>
+                    </div>
                   ) : isEligible ? (
                     <button
                       type="button"
@@ -313,9 +369,13 @@ export default function StudentDrivesPortal() {
                   ) : (
                     <button
                       disabled
-                      className="px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold cursor-not-allowed"
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold cursor-not-allowed border ${
+                        !passesCollege
+                          ? 'bg-rose-50 border-rose-200 text-rose-600'
+                          : 'bg-slate-100 border-slate-200 text-slate-400'
+                      }`}
                     >
-                      Ineligible to Register
+                      {!passesCollege ? 'Ineligible (College Policy)' : 'Ineligible (Company Criteria)'}
                     </button>
                   )}
                 </div>
@@ -330,7 +390,28 @@ export default function StudentDrivesPortal() {
         isOpen={isPassModalOpen}
         onClose={() => setIsPassModalOpen(false)}
         passData={selectedPass}
+        onStartOA={() => {
+          setIsPassModalOpen(false);
+          const matched = assessments?.find(as => 
+            as.companyName?.toLowerCase().includes(selectedPass?.companyName?.toLowerCase()) ||
+            selectedPass?.companyName?.toLowerCase().includes(as.companyName?.toLowerCase())
+          ) || assessments?.[0];
+          if (matched) setTakingAssessment(matched);
+          else if (onNavigate) onNavigate('assessments');
+        }}
       />
+
+      {/* Proctored Online Assessment Test Sandbox Modal */}
+      {takingAssessment && (
+        <TestSandboxModal
+          isOpen={!!takingAssessment}
+          onClose={() => setTakingAssessment(null)}
+          assessment={takingAssessment}
+          onSubmitTest={async (id, payload) => {
+            console.log('OA attempt submitted from drives portal:', id, payload);
+          }}
+        />
+      )}
 
     </div>
   );

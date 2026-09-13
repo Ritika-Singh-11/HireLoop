@@ -12,17 +12,22 @@ import {
   FileText, 
   ChevronRight, 
   AlertTriangle,
-  ArrowUpRight
+  ArrowUpRight,
+  ShieldAlert,
+  Target
 } from 'lucide-react';
 import { calculateJobMatchScore } from '../../utils/aiEngine';
+import { checkCandidateEligibility } from '../../utils/eligibilityHelper';
 import CoverLetterModal from './CoverLetterModal';
 
 export default function JobBoard() {
-  const { jobs, applications, applyToJob, student } = useApp();
+  const { jobs, applications, applyToJob, student, eligibilityPolicy } = useApp();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('All');
   const [minCgpaFilter, setMinCgpaFilter] = useState('All');
+  const [modeFilter, setModeFilter] = useState('All');
+  const [onlyEligible, setOnlyEligible] = useState(false);
   const [coverLetterJob, setCoverLetterJob] = useState(null);
   const [expandedJobId, setExpandedJobId] = useState(null);
 
@@ -31,43 +36,117 @@ export default function JobBoard() {
     return new Set(applications.filter(a => a.studentId === student.id).map(a => a.jobId));
   }, [applications, student.id]);
 
-  // Filtered jobs with smart match scores
+  // Smart branch normalization helper
+  const matchesBranchSelection = (eligibleBranches = [], selected) => {
+    if (selected === 'All') return true;
+    if (!eligibleBranches || eligibleBranches.length === 0) return true;
+
+    const sel = selected.toLowerCase().trim();
+    const aliases = {
+      cse: ['computer science', 'cse', 'comp sci', 'computing'],
+      it: ['information technology', 'it', 'infotech'],
+      ece: ['electronics', 'ece', 'communication', 'telecom'],
+      eee: ['electrical', 'eee'],
+      mech: ['mechanical', 'mech'],
+      civil: ['civil']
+    };
+
+    return eligibleBranches.some(b => {
+      const bLow = b.toLowerCase();
+      if (bLow.includes('all branches') || bLow.includes('all streams') || bLow.includes('any')) {
+        return true;
+      }
+      if (bLow.includes(sel)) return true;
+
+      for (const [key, list] of Object.entries(aliases)) {
+        if (sel.includes(key) || list.some(alias => sel.includes(alias))) {
+          if (list.some(alias => bLow.includes(alias))) return true;
+        }
+      }
+      return false;
+    });
+  };
+
+  const matchesCgpaFilter = (jobMinCgpa, filterValue) => {
+    if (filterValue === 'All') return true;
+    if (filterValue === 'eligible') {
+      return (student.cgpa || 0) >= jobMinCgpa;
+    }
+    const threshold = parseFloat(filterValue);
+    return jobMinCgpa <= threshold;
+  };
+
+  // Filtered jobs with smart match scores & synchronized college/company eligibility
   const processedJobs = useMemo(() => {
     return jobs
       .filter(job => job.approved)
       .map(job => {
         const matchScore = calculateJobMatchScore(student, job);
-        const isEligibleCgpa = student.cgpa >= job.minCgpa;
-        const isEligibleBranch = job.eligibleBranches.some(b => 
-          b.toLowerCase().includes(student.branch.toLowerCase()) || 
-          b.toLowerCase().includes('all branches')
-        );
+        
+        // Strict Synchronized Eligibility: College Placement Policy Overrides!
+        const evalResult = checkCandidateEligibility({
+          student,
+          companyRequirement: job,
+          collegePolicy: eligibilityPolicy,
+          userApplications: applications
+        });
+
+        const isEligibleCgpa = (parseFloat(student.cgpa) || 0) >= (parseFloat(job.minCgpa) || 0);
+        const isEligibleBranch = matchesBranchSelection(job.eligibleBranches, student.branch || '');
+        const isEligibleBacklogs = job.maxBacklogs === undefined || (parseInt(student.backlogs) || 0) <= parseInt(job.maxBacklogs);
+        const isEligibleBatch = !job.eligibleBatch || !student.batch || String(job.eligibleBatch).toLowerCase() === 'all' || String(job.eligibleBatch) === String(student.batch);
+
         return {
           ...job,
           matchScore,
-          isEligible: isEligibleCgpa && isEligibleBranch,
+          isEligible: evalResult.isEligible,
+          passesCompany: evalResult.passesCompany,
+          passesCollege: evalResult.passesCollege,
+          collegeReasons: evalResult.collegeReasons,
+          companyReasons: evalResult.companyReasons,
+          allReasons: evalResult.allReasons,
+          effectiveMinCgpa: evalResult.effectiveMinCgpa,
+          effectiveMaxBacklogs: evalResult.effectiveMaxBacklogs,
+          eligibilityDetails: evalResult,
           isEligibleCgpa,
-          isEligibleBranch
+          isEligibleBranch,
+          isEligibleBacklogs,
+          isEligibleBatch
         };
       })
       .filter(job => {
+        if (onlyEligible && !job.isEligible) return false;
+
         // Search filter
         const matchSearch = 
+          !searchTerm.trim() ||
           job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
           job.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          job.requiredSkills.some(s => s.toLowerCase().includes(searchTerm.toLowerCase()));
+          (job.requiredSkills || []).some(s => s.toLowerCase().includes(searchTerm.toLowerCase()));
 
         // Branch filter
-        const matchBranch = selectedBranch === 'All' || 
-          job.eligibleBranches.some(b => b.toLowerCase().includes(selectedBranch.toLowerCase()) || b.includes('All Branches'));
+        const matchBranch = matchesBranchSelection(job.eligibleBranches, selectedBranch);
 
         // CGPA filter
-        const matchCgpa = minCgpaFilter === 'All' || job.minCgpa <= parseFloat(minCgpaFilter);
+        const matchCgpa = matchesCgpaFilter(job.minCgpa, minCgpaFilter);
 
-        return matchSearch && matchBranch && matchCgpa;
+        // Mode filter
+        const matchMode = modeFilter === 'All' || (job.mode || '').toLowerCase() === modeFilter.toLowerCase();
+
+        return matchSearch && matchBranch && matchCgpa && matchMode;
       })
       .sort((a, b) => b.matchScore - a.matchScore);
-  }, [jobs, student, searchTerm, selectedBranch, minCgpaFilter]);
+  }, [jobs, student, eligibilityPolicy, applications, searchTerm, selectedBranch, minCgpaFilter, modeFilter, onlyEligible]);
+
+  const hasActiveFilters = searchTerm || selectedBranch !== 'All' || minCgpaFilter !== 'All' || modeFilter !== 'All' || onlyEligible;
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSelectedBranch('All');
+    setMinCgpaFilter('All');
+    setModeFilter('All');
+    setOnlyEligible(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -92,7 +171,7 @@ export default function JobBoard() {
 
         {/* Filter inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2">
-          <div className="sm:col-span-6 relative">
+          <div className="sm:col-span-4 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -109,10 +188,12 @@ export default function JobBoard() {
               onChange={(e) => setSelectedBranch(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
             >
-              <option value="All">All Branches</option>
-              <option value="Computer Science">CSE</option>
-              <option value="Information Technology">IT</option>
-              <option value="Electronics">ECE</option>
+              <option value="All">All Branches & Streams</option>
+              <option value="Computer Science">Computer Science (CSE)</option>
+              <option value="Information Technology">Information Technology (IT)</option>
+              <option value="Electronics">Electronics & Comm (ECE)</option>
+              <option value="Electrical">Electrical (EEE)</option>
+              <option value="Mechanical">Mechanical</option>
             </select>
           </div>
 
@@ -122,12 +203,58 @@ export default function JobBoard() {
               onChange={(e) => setMinCgpaFilter(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
             >
-              <option value="All">Max CGPA Requirement</option>
-              <option value="8.0">Eligible for &ge; 8.0 CGPA</option>
-              <option value="7.5">Eligible for &ge; 7.5 CGPA</option>
-              <option value="7.0">Eligible for &ge; 7.0 CGPA</option>
+              <option value="All">All CGPA Requirements</option>
+              <option value="eligible">Eligible for My CGPA ({student.cgpa})</option>
+              <option value="7.0">Min CGPA &le; 7.0 (Accessible to All)</option>
+              <option value="7.5">Min CGPA &le; 7.5</option>
+              <option value="8.0">Min CGPA &le; 8.0</option>
             </select>
           </div>
+
+          <div className="sm:col-span-2">
+            <select
+              value={modeFilter}
+              onChange={(e) => setModeFilter(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
+            >
+              <option value="All">All Modes</option>
+              <option value="Remote">Remote</option>
+              <option value="Hybrid">Hybrid</option>
+              <option value="On-site">On-site</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Quick Filter Badges */}
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-100 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setOnlyEligible(prev => !prev)}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                onlyEligible
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Only Jobs I'm Eligible For (CGPA &ge; Cutoff & Branch Match)</span>
+            </button>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="px-2.5 py-1 text-slate-400 hover:text-slate-700 font-semibold cursor-pointer underline"
+              >
+                Reset All Filters
+              </button>
+            )}
+          </div>
+
+          <span className="text-[11px] text-slate-400">
+            Showing {processedJobs.length} of {jobs.filter(j => j.approved).length} openings
+          </span>
         </div>
       </div>
 
@@ -191,6 +318,8 @@ export default function JobBoard() {
                           Min CGPA: <strong className="text-slate-800">{job.minCgpa}</strong>
                         </span>
                         <span>•</span>
+                        <span>Max Backlogs: <strong className="text-slate-800">{job.maxBacklogs !== undefined ? job.maxBacklogs : 0}</strong></span>
+                        <span>•</span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
                           Deadline: {job.deadline}
@@ -203,10 +332,15 @@ export default function JobBoard() {
                   <div className="flex flex-wrap items-center gap-2.5 lg:self-center">
                     <button
                       type="button"
+                      disabled={!job.isEligible}
                       onClick={() => setCoverLetterJob(job)}
-                      className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                      className={`px-3.5 py-2 rounded-xl border text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                        !job.isEligible
+                          ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer'
+                      }`}
                     >
-                      <FileText className="w-3.5 h-3.5 text-purple-600" />
+                      <FileText className={`w-3.5 h-3.5 ${!job.isEligible ? 'text-slate-300' : 'text-purple-600'}`} />
                       <span>AI Cover Letter</span>
                     </button>
 
@@ -215,11 +349,21 @@ export default function JobBoard() {
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                         <span>Applied</span>
                       </span>
+                    ) : !job.isEligible ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="px-4 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 font-bold text-xs cursor-not-allowed flex items-center gap-1.5 shadow-none"
+                        title={job.allReasons?.join(' • ') || "You do not meet the academic eligibility cutoffs"}
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                        <span>{!job.passesCollege && job.passesCompany ? 'Ineligible (College Policy)' : 'Ineligible'}</span>
+                      </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => applyToJob(job)}
-                        className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5"
+                        className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
                       >
                         <span>1-Click Apply</span>
                         <ArrowUpRight className="w-3.5 h-3.5" />
@@ -229,7 +373,7 @@ export default function JobBoard() {
                     <button
                       type="button"
                       onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
-                      className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors text-xs font-medium"
+                      className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors text-xs font-medium cursor-pointer"
                     >
                       {isExpanded ? 'Less' : 'Details'}
                     </button>
@@ -237,13 +381,48 @@ export default function JobBoard() {
 
                 </div>
 
-                {/* Eligibility Warning if CGPA / Branch not matching */}
+                {/* Synchronized Eligibility Warning: College Directorate Policy vs Company Cutoff */}
                 {!job.isEligible && (
-                  <div className="mt-3 flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>
-                      Eligibility check: {!job.isEligibleCgpa && `Required CGPA is ${job.minCgpa} (Your CGPA: ${student.cgpa}).`} {!job.isEligibleBranch && `Open for: ${job.eligibleBranches.join(', ')}.`}
-                    </span>
+                  <div className="mt-3 space-y-2">
+                    {/* College Placement Directorate Restriction */}
+                    {!job.passesCollege && (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2.5 animate-fadeIn">
+                        <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <strong className="font-bold text-rose-950 flex items-center gap-1.5">
+                              <span>Restricted by University Placement Directorate Policy</span>
+                              <span className="text-[10px] px-1.5 py-0.2 bg-rose-200 text-rose-900 rounded font-bold uppercase tracking-wider">College Rule</span>
+                            </strong>
+                          </div>
+                          <ul className="list-disc list-inside text-rose-800 space-y-0.5">
+                            {(job.collegeReasons || []).map((reason, rIdx) => (
+                              <li key={rIdx}>{reason}</li>
+                            ))}
+                          </ul>
+                          {job.passesCompany && (
+                            <p className="text-[11px] text-rose-700 font-medium italic pt-0.5">
+                              Note: Even though you meet {job.companyName}&apos;s company criteria, University Directorate rules take strict precedence and block this application.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Company Specific Cutoff (if failing company criteria too) */}
+                    {!job.passesCompany && (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-fadeIn">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="flex-1 space-y-1">
+                          <strong className="font-bold text-amber-950 block">Company Recruiter Cutoffs:</strong>
+                          <ul className="list-disc list-inside text-amber-800 space-y-0.5">
+                            {(job.companyReasons || []).map((reason, rIdx) => (
+                              <li key={rIdx}>{reason}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

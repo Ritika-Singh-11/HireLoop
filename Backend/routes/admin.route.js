@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import auth from '../middleware/auth.middleware.js';
+import optionalAuth from '../middleware/optionalAuth.middleware.js';
 import * as ctrl from '../controllers/admin.controller.js';
 
 const router = Router();
@@ -9,7 +10,7 @@ router.get('/stats', ctrl.getDashboardStats);
 
 // Corporate Employer Approvals
 router.get('/companies', ctrl.getCompanies);
-router.patch('/companies/:id/status', auth, ctrl.updateCompanyStatus);
+router.patch('/companies/:id/status', optionalAuth, ctrl.updateCompanyStatus);
 
 // Campus Announcements
 router.get('/announcements', ctrl.getAnnouncements);

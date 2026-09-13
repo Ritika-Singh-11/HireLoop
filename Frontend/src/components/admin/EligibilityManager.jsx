@@ -11,7 +11,9 @@ import {
   Sliders, 
   Award, 
   RefreshCw,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 
 const ALL_CAMPUS_BRANCHES = [
@@ -133,6 +135,21 @@ export default function EligibilityManager() {
               <span className="text-2xl font-black text-rose-400">{studentsList.length - eligibleStudents.length}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Institutional Synchronization & Precedence Notice */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-start gap-3.5">
+        <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+          <ShieldCheck className="w-4 h-4" />
+        </div>
+        <div>
+          <h4 className="text-xs font-black text-indigo-950 uppercase tracking-wider">
+            Institutional Policy Precedence Enforced & Synchronized
+          </h4>
+          <p className="text-xs text-indigo-900 mt-0.5 leading-relaxed">
+            University Directorate rules configured here strictly take precedence over all company-specific cutoffs. Even if an employer offers attractive compensation packages or has lower minimum requirements, students who do not satisfy this College Eligibility Policy are automatically blocked from applying or registering across both the <strong>Job Board</strong> and <strong>Campus Recruitment Drives</strong>.
+          </p>
         </div>
       </div>
 

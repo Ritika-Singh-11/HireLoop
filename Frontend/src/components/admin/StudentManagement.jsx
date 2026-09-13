@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../services/api';
 import { useApp } from '../../context/AppContext';
 import { 
@@ -44,19 +44,51 @@ export default function StudentManagement() {
     loadStudents();
   }, []);
 
-  const allStudents = backendStudents.length > 0
-    ? backendStudents.map(bs => ({
+  const allStudents = useMemo(() => {
+    const studentMap = new Map();
+
+    // 1. First insert studentsList (contains live profile edits from student session)
+    (studentsList || []).forEach(s => {
+      const key = (s.email || s.rollNumber || s.id || '').toLowerCase().trim();
+      if (key) studentMap.set(key, { ...s });
+    });
+
+    // 2. Merge backendStudents without dropping newer local skills
+    (backendStudents || []).forEach(bs => {
+      const key = (bs.email || bs.rollNumber || bs.user?.email || bs._id || bs.id || '').toLowerCase().trim();
+      const existing = studentMap.get(key) || {};
+      
+      const merged = {
+        ...existing,
         ...bs,
-        id: bs._id || bs.id,
-        isVerified: bs.isVerified ?? bs.verified ?? false,
-        isBlocked: bs.isBlocked ?? false,
-        rollNumber: bs.rollNumber || bs.roll || '21BCSE000',
-        branch: bs.branch || 'Computer Science',
-        batch: bs.batch || '2026',
-        cgpa: bs.cgpa || 8.0,
-        backlogs: bs.backlogs || 0
-      }))
-    : studentsList;
+        id: bs._id || bs.id || existing.id,
+        name: bs.user?.name || bs.name || existing.name || 'Candidate',
+        email: bs.user?.email || bs.email || existing.email,
+        isVerified: bs.isVerified ?? bs.verified ?? existing.isVerified ?? false,
+        isBlocked: bs.isBlocked ?? existing.isBlocked ?? false,
+        rollNumber: bs.rollNumber || bs.roll || existing.rollNumber || '21BCSE000',
+        branch: bs.branch || existing.branch || 'Computer Science',
+        batch: bs.batch || existing.batch || '2026',
+        cgpa: bs.cgpa ?? existing.cgpa ?? 8.0,
+        backlogs: bs.backlogs ?? existing.backlogs ?? 0,
+        // Priority: local newly added skills > backend skills > empty array
+        skills: (existing.skills && existing.skills.length > 0) ? existing.skills : (bs.skills || [])
+      };
+      studentMap.set(key, merged);
+    });
+
+    return Array.from(studentMap.values());
+  }, [backendStudents, studentsList]);
+
+  const activeModalStudent = useMemo(() => {
+    if (!viewProfileStudent) return null;
+    const match = allStudents.find(s => 
+      (s.id && s.id === viewProfileStudent.id) ||
+      (s.email && viewProfileStudent.email && s.email.toLowerCase() === viewProfileStudent.email.toLowerCase()) ||
+      (s.rollNumber && viewProfileStudent.rollNumber && s.rollNumber.toLowerCase() === viewProfileStudent.rollNumber.toLowerCase())
+    );
+    return match || viewProfileStudent;
+  }, [viewProfileStudent, allStudents]);
 
   const branches = ['All', ...new Set(allStudents.map(s => s.branch))];
 
@@ -437,17 +469,17 @@ export default function StudentManagement() {
       )}
 
       {/* Student Profile Quick Inspect Modal */}
-      {viewProfileStudent && (
+      {activeModalStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white w-full max-w-lg rounded-2xl p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-start justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-indigo-600 text-white font-black text-base flex items-center justify-center">
-                  {viewProfileStudent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  {activeModalStudent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-lg">{viewProfileStudent.name}</h3>
-                  <p className="text-xs text-slate-500 font-mono">{viewProfileStudent.rollNumber} • {viewProfileStudent.branch}</p>
+                  <h3 className="font-extrabold text-slate-900 text-lg">{activeModalStudent.name}</h3>
+                  <p className="text-xs text-slate-500 font-mono">{activeModalStudent.rollNumber} • {activeModalStudent.branch}</p>
                 </div>
               </div>
               <button 
@@ -462,40 +494,44 @@ export default function StudentManagement() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-slate-50 rounded-xl">
                   <span className="text-slate-400 font-semibold block">CGPA Score</span>
-                  <span className="text-lg font-black text-indigo-700">{viewProfileStudent.cgpa} / 10.0</span>
+                  <span className="text-lg font-black text-indigo-700">{activeModalStudent.cgpa} / 10.0</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl">
                   <span className="text-slate-400 font-semibold block">Active Backlogs</span>
-                  <span className="text-lg font-black text-slate-800">{viewProfileStudent.backlogs}</span>
+                  <span className="text-lg font-black text-slate-800">{activeModalStudent.backlogs}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl">
                   <span className="text-slate-400 font-semibold block">Contact Email</span>
-                  <span className="font-semibold text-slate-700 break-all">{viewProfileStudent.email}</span>
+                  <span className="font-semibold text-slate-700 break-all">{activeModalStudent.email}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl">
                   <span className="text-slate-400 font-semibold block">Phone</span>
-                  <span className="font-semibold text-slate-700">{viewProfileStudent.phone || '+91 98765 43210'}</span>
+                  <span className="font-semibold text-slate-700">{activeModalStudent.phone || '+91 98765 43210'}</span>
                 </div>
               </div>
 
               <div>
                 <span className="text-slate-500 font-bold block mb-1.5">Registered Technical Skills:</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {viewProfileStudent.skills?.map((sk, i) => (
-                    <span key={i} className="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 font-semibold text-[11px]">
-                      {sk}
-                    </span>
-                  ))}
+                  {(activeModalStudent.skills && activeModalStudent.skills.length > 0) ? (
+                    activeModalStudent.skills.map((sk, i) => (
+                      <span key={i} className="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 font-semibold text-[11px]">
+                        {sk}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-slate-400 italic text-xs">No technical skills registered yet</span>
+                  )}
                 </div>
               </div>
 
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
                 <span className="font-bold text-amber-900 block mb-0.5">Placement Cell Status:</span>
                 <p className="text-amber-800">
-                  {viewProfileStudent.isBlocked
-                    ? `Suspended: ${viewProfileStudent.blockReason || 'Disciplinary violation'}`
-                    : viewProfileStudent.placedCompany
-                    ? `Placed at ${viewProfileStudent.placedCompany} with package ${viewProfileStudent.placedCtc}`
+                  {activeModalStudent.isBlocked
+                    ? `Suspended: ${activeModalStudent.blockReason || 'Disciplinary violation'}`
+                    : activeModalStudent.placedCompany
+                    ? `Placed at ${activeModalStudent.placedCompany} with package ${activeModalStudent.placedCtc}`
                     : 'Actively participating in ongoing recruitment drives.'}
                 </p>
               </div>

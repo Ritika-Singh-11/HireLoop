@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import NotificationDrawer from './NotificationDrawer';
+import BrandLogo from './BrandLogo';
 import { 
   GraduationCap, 
   Briefcase, 
@@ -93,27 +94,12 @@ export default function Navbar({ onNavigate }) {
         <div className="flex items-center justify-between h-16 gap-4">
           
           {/* Logo & Portal Identity */}
-          <div 
+          <BrandLogo 
+            size="md"
+            versionBadge="Campus 2026"
+            subtitle="Autonomous Placement & AI Career Portal"
             onClick={() => setCurrentRole('student')}
-            className="flex items-center gap-3 cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600 bg-clip-text text-transparent">
-                  HireLoop
-                </span>
-                <span className="hidden sm:inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  Campus 2026
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 hidden md:block">
-                Autonomous Placement & AI Career Portal
-              </p>
-            </div>
-          </div>
+          />
 
           {/* Quick Role Navigation Bar with Session Status Dots */}
           <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-inner">

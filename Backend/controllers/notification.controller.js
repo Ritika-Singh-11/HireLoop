@@ -3,8 +3,8 @@ import notificationService from '../services/notification.service.js';
 // GET /api/notifications?role=student&unreadOnly=false&limit=40
 export const getNotifications = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const role = req.query.role || req.user.role || 'student';
+    const userId = req.user?.id || req.user?._id || 'guest_user';
+    const role = req.query.role || req.user?.role || 'student';
     const { unreadOnly, limit } = req.query;
 
     const data = await notificationService.getUserNotifications(userId, role, {
@@ -22,8 +22,8 @@ export const getNotifications = async (req, res, next) => {
 export const markNotificationRead = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
-    const role = req.query.role || req.user.role || 'student';
+    const userId = req.user?.id || req.user?._id || 'guest_user';
+    const role = req.query.role || req.user?.role || 'student';
 
     const updated = await notificationService.markAsRead(id, userId, role);
     if (!updated) {
@@ -39,8 +39,8 @@ export const markNotificationRead = async (req, res, next) => {
 // PATCH /api/notifications/mark-all-read
 export const markAllNotificationsRead = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const role = req.body?.role || req.query.role || req.user.role || 'student';
+    const userId = req.user?.id || req.user?._id || 'guest_user';
+    const role = req.body?.role || req.query.role || req.user?.role || 'student';
 
     await notificationService.markAllAsRead(userId, role);
     res.json({ message: 'All notifications marked as read' });
@@ -53,8 +53,8 @@ export const markAllNotificationsRead = async (req, res, next) => {
 export const deleteNotification = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
-    const role = req.query.role || req.user.role || 'student';
+    const userId = req.user?.id || req.user?._id || 'guest_user';
+    const role = req.query.role || req.user?.role || 'student';
 
     const deleted = await notificationService.deleteNotification(id, userId, role);
     if (!deleted) {
@@ -70,8 +70,8 @@ export const deleteNotification = async (req, res, next) => {
 // DELETE /api/notifications/clear-all
 export const clearAllReadNotifications = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const role = req.body?.role || req.query.role || req.user.role || 'student';
+    const userId = req.user?.id || req.user?._id || 'guest_user';
+    const role = req.body?.role || req.query.role || req.user?.role || 'student';
 
     await notificationService.clearAllRead(userId, role);
     res.json({ message: 'All read notifications cleared' });

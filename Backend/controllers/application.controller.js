@@ -24,12 +24,26 @@ export const applyToJob = async (req, res, next) => {
       return res.status(400).json({ message: 'Application deadline has passed' });
     }
 
-    // Eligibility check server-side (never trust the frontend filter alone)
-    if (job.minCgpa && studentProfile.cgpa < job.minCgpa) {
-      return res.status(403).json({ message: `Minimum CGPA required is ${job.minCgpa}` });
-    }
-    if (job.eligibleBranches?.length && !job.eligibleBranches.includes(studentProfile.branch)) {
-      return res.status(403).json({ message: 'Your branch is not eligible for this job' });
+    // Synchronized eligibility check server-side (College Directorate Policy + Company Job Criteria)
+    const EligibilityPolicy = (await import('../models/eligibilityPolicy.model.js')).default;
+    const { evaluateStudentEligibility } = await import('../services/eligibility.service.js');
+    const policy = (await EligibilityPolicy.findOne().lean()) || {};
+
+    const evalResult = evaluateStudentEligibility(studentProfile, {
+      minCgpa: job.minCgpa,
+      maxBacklogs: job.maxBacklogs,
+      eligibleBranches: job.eligibleBranches,
+      eligibleBatch: job.batch,
+    }, policy);
+
+    if (!evalResult.isEligible) {
+      return res.status(403).json({
+        success: false,
+        message: 'Eligibility criteria not met under University Placement Directorate Policy',
+        reasons: evalResult.reasons,
+        collegeReasons: evalResult.collegeReasons,
+        companyReasons: evalResult.companyReasons,
+      });
     }
 
     let application;

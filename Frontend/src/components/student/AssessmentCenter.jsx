@@ -17,9 +17,11 @@ import {
   ChevronRight, 
   Eye, 
   Check, 
-  ExternalLink 
+  ExternalLink,
+  Loader2 
 } from 'lucide-react';
 import TestSandboxModal from './TestSandboxModal';
+import { api } from '../../services/api';
 
 export default function AssessmentCenter() {
   const { assessments, submissions, submitAssessmentAttempt, student } = useApp();
@@ -30,7 +32,8 @@ export default function AssessmentCenter() {
   // Launching assessment modal states
   const [selectedAssessmentToStart, setSelectedAssessmentToStart] = useState(null);
   const [showPreTestModal, setShowPreTestModal] = useState(false);
-  const [agreedToRules, setAgreedToRules] = useState(false);
+  const [agreedToRules, setAgreedToRules] = useState(true);
+  const [isHydratingTest, setIsHydratingTest] = useState(false);
   const [activeTest, setActiveTest] = useState(null);
 
   // Scorecard modal state
@@ -50,14 +53,26 @@ export default function AssessmentCenter() {
 
   const handleOpenStartTest = (assessment) => {
     setSelectedAssessmentToStart(assessment);
-    setAgreedToRules(false);
+    setAgreedToRules(true);
     setShowPreTestModal(true);
   };
 
-  const handleConfirmLaunch = () => {
+  const handleConfirmLaunch = async () => {
     if (!selectedAssessmentToStart) return;
-    setActiveTest(selectedAssessmentToStart);
-    setShowPreTestModal(false);
+    setIsHydratingTest(true);
+    try {
+      const full = await api.getAssessment(selectedAssessmentToStart.id || selectedAssessmentToStart._id);
+      if (full?.assessment && (full.assessment.mcqQuestions?.length > 0 || full.assessment.codingProblems?.length > 0)) {
+        setActiveTest(full.assessment);
+      } else {
+        setActiveTest(selectedAssessmentToStart);
+      }
+    } catch {
+      setActiveTest(selectedAssessmentToStart);
+    } finally {
+      setIsHydratingTest(false);
+      setShowPreTestModal(false);
+    }
   };
 
   // Metrics
@@ -232,7 +247,7 @@ export default function AssessmentCenter() {
                 {/* Bottom Action Footer */}
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                   {isCompleted ? (
-                    <div className="flex items-center justify-between w-full">
+                    <div className="flex flex-wrap items-center justify-between gap-2 w-full">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${
                           sub.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
@@ -240,13 +255,22 @@ export default function AssessmentCenter() {
                           {sub.passed ? `Cleared: ${sub.percentage}%` : `Score: ${sub.percentage}% (Not cleared)`}
                         </span>
                       </div>
-                      <button
-                        onClick={() => setInspectSubmission(sub)}
-                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center gap-1.5"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>View Scorecard</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setInspectSubmission(sub)}
+                          className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Scorecard</span>
+                        </button>
+                        <button
+                          onClick={() => handleOpenStartTest(asm)}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Retake / Practice</span>
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between w-full">
@@ -417,11 +441,20 @@ export default function AssessmentCenter() {
 
                 <button
                   onClick={handleConfirmLaunch}
-                  disabled={!agreedToRules}
+                  disabled={!agreedToRules || isHydratingTest}
                   className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-40 cursor-pointer"
                 >
-                  <Play className="w-4 h-4 fill-current" />
-                  <span>Launch Proctored Assessment</span>
+                  {isHydratingTest ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Preparing Sandbox...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Launch Proctored Assessment</span>
+                    </>
+                  )}
                 </button>
               </div>
 

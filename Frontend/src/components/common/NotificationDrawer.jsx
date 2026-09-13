@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import {
   Bell,
@@ -111,16 +112,16 @@ export default function NotificationDrawer({ isOpen, onClose, onNavigate }) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end animate-fadeIn">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex justify-end">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs transition-opacity duration-200"
         onClick={onClose}
       />
 
       {/* Slide-in Drawer Container */}
-      <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10 animate-slideLeft border-l border-slate-200">
+      <div className="relative w-full max-w-md bg-white h-screen max-h-screen shadow-2xl flex flex-col z-10 border-l border-slate-200 overflow-hidden transform transition-all duration-300">
         
         {/* Drawer Header */}
         <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between">
@@ -323,6 +324,7 @@ export default function NotificationDrawer({ isOpen, onClose, onNavigate }) {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

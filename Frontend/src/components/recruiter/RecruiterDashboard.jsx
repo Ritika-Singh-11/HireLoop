@@ -10,13 +10,17 @@ import {
   MapPin, 
   Clock, 
   ArrowRight,
-  TrendingUp
+  TrendingUp,
+  Sliders,
+  GraduationCap
 } from 'lucide-react';
 import PostJobModal from './PostJobModal';
+import EditJobModal from './EditJobModal';
 
 export default function RecruiterDashboard({ onNavigate }) {
-  const { jobs, applications } = useApp();
+  const { jobs, applications, currentUser } = useApp();
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState(null);
 
   const totalApps = applications.length;
   const shortlisted = applications.filter(a => a.status === 'Shortlisted').length;
@@ -33,9 +37,14 @@ export default function RecruiterDashboard({ onNavigate }) {
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold mb-3 border border-emerald-500/30">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Campus Recruitment Console 2026</span>
+              {currentUser?.companyName && (
+                <span className="ml-2 pl-2 border-l border-emerald-500/40 text-emerald-100 font-extrabold flex items-center gap-1">
+                  🏢 {currentUser.companyName}
+                </span>
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Recruiter Talent Portal
+              Recruiter Talent Portal {currentUser?.companyName ? `• ${currentUser.companyName}` : ''}
             </h1>
             <p className="mt-2 text-emerald-100/90 text-sm max-w-2xl leading-relaxed">
               Manage university job postings, screen verified student profiles with ATS match analytics, and schedule interviews.
@@ -141,26 +150,51 @@ export default function RecruiterDashboard({ onNavigate }) {
                         {job.salaryDisplay}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500">
                       <span>{job.department}</span>
                       <span>•</span>
-                      <span>Min CGPA: {job.minCgpa}</span>
+                      <span className="font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        Min CGPA: {job.minCgpa}
+                      </span>
+                      <span>•</span>
+                      <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                        Max Backlogs: {job.maxBacklogs !== undefined ? job.maxBacklogs : 0}
+                      </span>
+                      <span>•</span>
+                      <span>Batch {job.eligibleBatch || '2026'}</span>
                       <span>•</span>
                       <span>Deadline: {job.deadline}</span>
                     </div>
+                    {job.eligibleBranches && (
+                      <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <GraduationCap className="w-3 h-3 text-slate-400" />
+                        <span>Branches: {Array.isArray(job.eligibleBranches) ? job.eligibleBranches.join(', ') : job.eligibleBranches}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   <div className="text-right">
                     <div className="text-sm font-extrabold text-slate-900">{jobApps.length} Applicants</div>
                     <div className="text-[11px] text-slate-500">
                       {jobApps.filter(a => a.status === 'Shortlisted').length} shortlisted
                     </div>
                   </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setEditingJob(job)}
+                    className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Customize Min CGPA, Backlogs, Eligible Branches & Package"
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>Edit Eligibility</span>
+                  </button>
+
                   <button
                     onClick={() => onNavigate('applicants')}
-                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
                   >
                     View Applicants
                   </button>
@@ -175,6 +209,13 @@ export default function RecruiterDashboard({ onNavigate }) {
       <PostJobModal
         isOpen={isPostModalOpen}
         onClose={() => setIsPostModalOpen(false)}
+      />
+
+      {/* Edit Job & Eligibility Modal */}
+      <EditJobModal
+        isOpen={!!editingJob}
+        job={editingJob}
+        onClose={() => setEditingJob(null)}
       />
 
     </div>

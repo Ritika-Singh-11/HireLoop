@@ -9,6 +9,7 @@ import {
 export const analyzeResume = async (req, res, next) => {
   try {
     const { resumeText, jobTitle, jobDescription, requiredSkills, saveToProfile } = req.body;
+    const apiKey = req.headers['x-gemini-api-key'] || req.body.apiKey;
 
     if (!resumeText || resumeText.trim().length < 20) {
       return res.status(400).json({ message: 'Resume text is required for ATS analysis' });
@@ -18,7 +19,8 @@ export const analyzeResume = async (req, res, next) => {
       resumeText,
       jobTitle: jobTitle || 'Software Engineer',
       jobDescription: jobDescription || '',
-      requiredSkills: requiredSkills || []
+      requiredSkills: requiredSkills || [],
+      apiKey
     });
 
     // Optionally save verified ATS score to student profile
@@ -43,6 +45,7 @@ export const analyzeResume = async (req, res, next) => {
 export const evaluateInterviewAnswer = async (req, res, next) => {
   try {
     const { roleTitle, question, studentAnswer, idealPoints } = req.body;
+    const apiKey = req.headers['x-gemini-api-key'] || req.body.apiKey;
 
     if (!studentAnswer || !question) {
       return res.status(400).json({ message: 'Question and student answer are required' });
@@ -52,7 +55,8 @@ export const evaluateInterviewAnswer = async (req, res, next) => {
       roleTitle: roleTitle || 'Software Engineer',
       question,
       studentAnswer,
-      idealPoints: idealPoints || ''
+      idealPoints: idealPoints || '',
+      apiKey
     });
 
     res.json({
@@ -67,13 +71,21 @@ export const evaluateInterviewAnswer = async (req, res, next) => {
 // POST /api/ai/mock-interview/questions - Dynamic questions generator
 export const generateQuestions = async (req, res, next) => {
   try {
-    const { roleTitle, companyName, jobDescription, count } = req.body;
+    const { roleTitle, companyName, jobDescription, count, domain, customDomain, difficulty, focusArea } = req.body;
+    const apiKey = req.headers['x-gemini-api-key'] || req.body.apiKey;
+
+    const selectedDomain = customDomain || domain || roleTitle || 'Software Development Engineer';
 
     const questions = await generateInterviewQuestionsWithGemini({
-      roleTitle: roleTitle || 'Software Development Engineer',
+      roleTitle: selectedDomain,
+      domain: selectedDomain,
+      customDomain,
+      difficulty: difficulty || 'Campus Graduate / Junior',
+      focusArea: focusArea || 'Core Fundamentals & Architecture',
       companyName: companyName || 'Campus Recruiter',
       jobDescription: jobDescription || '',
-      count: count || 3
+      count: count || 3,
+      apiKey
     });
 
     res.json({

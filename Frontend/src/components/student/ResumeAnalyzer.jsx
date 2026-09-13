@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   BrainCircuit, 
@@ -15,10 +15,12 @@ import {
   Award,
   BookmarkCheck,
   CheckCheck,
-  Loader2
+  Loader2,
+  Key
 } from 'lucide-react';
 import { analyzeResumeATS } from '../../utils/aiEngine';
 import { api } from '../../services/api';
+import AiSettingsModal from '../common/AiSettingsModal';
 
 export default function ResumeAnalyzer() {
   const { student, setStudent, jobs, showToast } = useApp();
@@ -65,6 +67,12 @@ ${student.skills?.join(', ')}
   const [targetJD, setTargetJD] = useState(jobs[0]?.description || '');
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
+  const [hasCustomKey, setHasCustomKey] = useState(false);
+
+  useEffect(() => {
+    setHasCustomKey(!!localStorage.getItem('recruitloop_gemini_api_key'));
+  }, [isAiSettingsOpen]);
 
   const handleJobSelect = (e) => {
     const jId = e.target.value;
@@ -181,14 +189,28 @@ ${student.skills?.join(', ')}
             </p>
           </div>
 
-          <button
-            onClick={handleAnalyze}
-            disabled={isScanning}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
-          >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>{isScanning ? 'Running ATS Diagnostics...' : 'Run ATS Analysis'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAiSettingsOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50/50 text-slate-700 text-xs font-bold transition-all flex items-center gap-2"
+            >
+              <Key className="w-3.5 h-3.5 text-indigo-600" />
+              <span>AI Key Config</span>
+              {hasCustomKey && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Custom Gemini Key Connected" />
+              )}
+            </button>
+
+            <button
+              onClick={handleAnalyze}
+              disabled={isScanning}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>{isScanning ? 'Running ATS Diagnostics...' : 'Run ATS Analysis'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -470,6 +492,13 @@ ${student.skills?.join(', ')}
 
         </div>
       )}
+
+      {/* AI Settings Modal */}
+      <AiSettingsModal
+        isOpen={isAiSettingsOpen}
+        onClose={() => setIsAiSettingsOpen(false)}
+        onKeyUpdated={() => setHasCustomKey(!!localStorage.getItem('recruitloop_gemini_api_key'))}
+      />
 
     </div>
   );

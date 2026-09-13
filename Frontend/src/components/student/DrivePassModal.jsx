@@ -11,10 +11,11 @@ import {
   GraduationCap, 
   QrCode,
   Sparkles,
-  Download
+  Download,
+  Code2
 } from 'lucide-react';
 
-export default function DrivePassModal({ isOpen, onClose, passData }) {
+export default function DrivePassModal({ isOpen, onClose, passData, onStartOA }) {
   if (!isOpen || !passData) return null;
 
   const {
@@ -158,6 +159,29 @@ export default function DrivePassModal({ isOpen, onClose, passData }) {
             </div>
           </div>
 
+          {/* Active OA Banner if current round is Assessment */}
+          {(currentRound === 'Online Assessment' || currentRound?.toLowerCase().includes('assessment') || currentRound?.toLowerCase().includes('oa')) && onStartOA && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-800">
+                  <Code2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-amber-900 text-xs">Stage 2: Online Assessment Active</h4>
+                  <p className="text-[11px] text-amber-700">Proctored test sandbox is ready for this candidate.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onStartOA}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Launch Test Sandbox</span>
+              </button>
+            </div>
+          )}
+
           {/* Barcode & Security Stamp */}
           <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -188,12 +212,24 @@ export default function DrivePassModal({ isOpen, onClose, passData }) {
           <span className="text-[11px] text-slate-500">
             Formals dress code mandatory for campus recruitment rounds.
           </span>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors"
-          >
-            Done
-          </button>
+          <div className="flex items-center gap-2">
+            {(currentRound === 'Online Assessment' || currentRound?.toLowerCase().includes('assessment') || currentRound?.toLowerCase().includes('oa')) && onStartOA && (
+              <button
+                type="button"
+                onClick={onStartOA}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Launch OA Test</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
         </div>
 
       </div>

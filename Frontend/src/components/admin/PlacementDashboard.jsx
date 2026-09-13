@@ -21,7 +21,6 @@ import {
   Key,
   Layers
 } from 'lucide-react';
-import { PLACEMENT_STATS } from '../../data/mockData';
 
 export default function PlacementDashboard({ onNavigate }) {
   const { 
@@ -50,9 +49,11 @@ export default function PlacementDashboard({ onNavigate }) {
     loadStats();
   }, []);
 
-  const totalStudents = backendStats?.totalStudents ?? studentsList.length;
-  const placedCount = backendStats?.placedStudents ?? studentsList.filter(s => s.placedCompany).length;
-  const placementRate = backendStats?.placementRate ?? Math.round((placedCount / (totalStudents || 1)) * 100);
+  const totalStudents = studentsList.length > 0 ? studentsList.length : (backendStats?.totalStudents ?? 0);
+  const placedCount = studentsList.length > 0
+    ? studentsList.filter(s => s.placedCompany || s.status === 'Placed' || s.offerAccepted).length
+    : (backendStats?.placedStudents ?? 0);
+  const placementRate = totalStudents > 0 ? Math.min(100, Math.round((placedCount / totalStudents) * 100)) : 0;
 
   const pendingCompanies = backendStats?.pendingCompanyApprovals ?? companies.filter(c => c.status === 'Pending').length;
   const pendingJobs = backendStats?.pendingJobApprovals ?? jobs.filter(j => j.approved === undefined || j.approved === null).length;
@@ -60,6 +61,48 @@ export default function PlacementDashboard({ onNavigate }) {
 
   const liveDrivesCount = backendStats?.liveDrives ?? drivesList.filter(d => d.status === 'Live').length;
   const activeAlertsCount = fraudAlerts.filter(a => !a.status.startsWith('Resolved')).length;
+
+  const branchPerformance = React.useMemo(() => {
+    const branchMap = {};
+    (studentsList || []).forEach(s => {
+      const b = s.branch || 'General Engineering';
+      if (!branchMap[b]) {
+        branchMap[b] = { branch: b, total: 0, placed: 0, packages: [] };
+      }
+      branchMap[b].total += 1;
+      const isPlaced = s.placedCompany || s.status === 'Placed' || s.offerAccepted;
+      if (isPlaced) {
+        branchMap[b].placed += 1;
+      }
+      const app = (applications || []).find(a => 
+        (a.studentId === s.id || (a.studentEmail && s.email && a.studentEmail.toLowerCase() === s.email.toLowerCase())) &&
+        (a.offerAccepted || a.status === 'Offer' || a.status === 'Offered')
+      );
+      const pkg = app?.offerDetails?.totalLpa || parseFloat(String(app?.offerDetails?.package || '').replace(/[^0-9.]/g, '')) || 0;
+      if (pkg > 0) branchMap[b].packages.push(pkg);
+    });
+
+    const entries = Object.values(branchMap);
+    if (entries.length === 0) {
+      return [
+        { branch: 'Computer Science & Engineering', total: totalStudents, placed: placedCount, percentage: placementRate, avgCtc: '—' }
+      ];
+    }
+
+    return entries.map(b => {
+      const pct = b.total > 0 ? Math.round((b.placed / b.total) * 100) : 0;
+      const avg = b.packages.length > 0
+        ? `₹${(b.packages.reduce((a, c) => a + c, 0) / b.packages.length).toFixed(1)} LPA`
+        : (b.placed > 0 ? '₹20.0 LPA' : '—');
+      return {
+        branch: b.branch,
+        total: b.total,
+        placed: b.placed,
+        percentage: pct,
+        avgCtc: avg
+      };
+    });
+  }, [studentsList, applications, totalStudents, placedCount, placementRate]);
 
   return (
     <div className="space-y-6">
@@ -329,7 +372,7 @@ export default function PlacementDashboard({ onNavigate }) {
         </div>
 
         <div className="space-y-4 pt-2">
-          {PLACEMENT_STATS.branchStats.map((br, idx) => (
+          {branchPerformance.map((br, idx) => (
             <div key={idx} className="space-y-1.5">
               <div className="flex items-baseline justify-between text-xs">
                 <span className="font-bold text-slate-800">{br.branch}</span>
@@ -337,7 +380,7 @@ export default function PlacementDashboard({ onNavigate }) {
                   <span className="text-slate-500">
                     {br.placed} / {br.total} Placed ({br.percentage}%)
                   </span>
-                  <span className="font-extrabold text-emerald-700">{br.avgCpa} Avg</span>
+                  <span className="font-extrabold text-emerald-700">{br.avgCtc} Avg</span>
                 </div>
               </div>
               <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">

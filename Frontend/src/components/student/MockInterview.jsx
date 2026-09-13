@@ -20,18 +20,66 @@ import {
   BookmarkCheck,
   CheckCheck,
   Loader2,
-  BookOpen
+  BookOpen,
+  Key,
+  ShieldCheck,
+  Check,
+  Search,
+  SlidersHorizontal,
+  Terminal,
+  Wand2,
+  Cpu,
+  Layers
 } from 'lucide-react';
 import { MOCK_INTERVIEW_ROLES, evaluateAnswer } from '../../utils/aiEngine';
 import { api } from '../../services/api';
+import AiSettingsModal from '../common/AiSettingsModal';
+
+export const INTERVIEW_DOMAINS = [
+  { id: 'fullstack', title: 'Full-Stack Web Development', icon: '🌐', tags: ['React', 'Node.js', 'Next.js', 'APIs'], desc: 'End-to-end architectures, state sync, caching, SSR & CSR trade-offs.' },
+  { id: 'frontend', title: 'Frontend & UI Engineering', icon: '🎨', tags: ['React', 'CSS', 'Performance', 'DOM'], desc: 'Fiber reconciler, Core Web Vitals, re-render optimizations, modern CSS.' },
+  { id: 'backend', title: 'Backend & Distributed Systems', icon: '⚙️', tags: ['Node.js', 'Microservices', 'Redis', 'Concurrency'], desc: 'Event loop, Redlock distributed locking, gRPC, idempotency, horizontal scale.' },
+  { id: 'devops', title: 'Cloud, DevOps & SRE', icon: '☁️', tags: ['AWS', 'Kubernetes', 'Docker', 'CI/CD'], desc: 'Rolling deployments, probe configurations, security pipelines, GitOps.' },
+  { id: 'aiml', title: 'Data Science & Machine Learning', icon: '🧠', tags: ['Python', 'PyTorch', 'Model Eval', 'Deep Learning'], desc: 'Bias-variance diagnosis, transformer attention, imbalanced dataset metrics.' },
+  { id: 'genai', title: 'Generative AI & LLMs', icon: '✨', tags: ['RAG', 'Vector DBs', 'Prompting', 'Guardrails'], desc: 'Production RAG pipelines, chunking, re-ranking, hallucination mitigation.' },
+  { id: 'cybersecurity', title: 'Cyber Security & AppSec', icon: '🛡️', tags: ['OWASP', 'Auth', 'Pen Testing', 'TLS Handshake'], desc: 'TLS 1.3 cryptography, CSRF/SSRF prevention, defense-in-depth.' },
+  { id: 'mobile', title: 'Mobile App Development', icon: '📱', tags: ['Flutter', 'React Native', 'Android', 'iOS'], desc: 'Offline persistence, sync queues, threading, native bridge architectures.' },
+  { id: 'systemdesign', title: 'System Design & Scalability', icon: '🏗️', tags: ['High Scale', 'Sharding', 'CAP', 'Queues'], desc: 'Bitly URL shorteners, large-scale notification queues, microservice partitioning.' },
+  { id: 'dataengineering', title: 'Data Engineering & Big Data', icon: '📊', tags: ['Kafka', 'Spark', 'SQL', 'ETL Pipelines'], desc: 'Lambda vs Kappa stream architectures, real-time analytics, partitioning.' },
+  { id: 'dba', title: 'Database Administration (DBA)', icon: '💾', tags: ['PostgreSQL', 'MongoDB', 'Indexing', 'ACID'], desc: 'Query profiling, B-tree indexes, isolation levels, write-ahead logging.' },
+  { id: 'testing', title: 'QA Automation & Testing', icon: '🧪', tags: ['Cypress', 'Jest', 'TDD', 'Stress Tests'], desc: 'End-to-end automation, regression coverage, continuous load testing.' },
+  { id: 'blockchain', title: 'Blockchain & Web3', icon: '⛓️', tags: ['Smart Contracts', 'Solidity', 'EVM', 'Security'], desc: 'Reentrancy protection, gas optimizations, consensus mechanisms.' },
+  { id: 'embedded', title: 'Embedded Systems & IoT', icon: '⚡', tags: ['C/C++', 'RTOS', 'Microcontrollers', 'Memory'], desc: 'Memory-constrained execution, interrupt handling, real-time protocols.' },
+  { id: 'product', title: 'Tech Product Management', icon: '💼', tags: ['MVP Scoping', 'Metrics', 'STAR Method'], desc: 'Prioritization frameworks, trade-offs, engineering stakeholder negotiation.' }
+];
+
+export const CUSTOM_DOMAIN_SUGGESTIONS = [
+  'Rust Systems Programming',
+  'Golang Distributed Microservices',
+  'Flutter & Cross-Platform Mobile',
+  'Kubernetes, Helm & GitOps',
+  'GraphQL, Apollo & Federation',
+  'Next.js 14 App Router & Server Actions',
+  'Redis, Kafka & Event Architecture',
+  'C++ Embedded & Automotive Systems',
+  'Blockchain & Solidity Smart Contracts',
+  'Cybersecurity & Web App Penetration Testing',
+  'Generative AI & LLM Fine-Tuning',
+  'Snowflake & dbt Modern Data Stack'
+];
 
 export default function MockInterview() {
   const { student, setStudent, jobs, showToast } = useApp();
 
-  // Track selection: standard tracks or a specific campus job
-  const [selectedRoleKey, setSelectedRoleKey] = useState('frontend');
+  // Mode: 'domain' | 'custom' | 'campus-job'
+  const [interviewMode, setInterviewMode] = useState('domain');
+  const [selectedDomainKey, setSelectedDomainKey] = useState('fullstack');
+  const [customDomainText, setCustomDomainText] = useState('');
+  const [domainSearchQuery, setDomainSearchQuery] = useState('');
+  const [selectedDifficulty, setSelectedDifficulty] = useState('Campus Graduate / Junior (0-2 Yrs)');
+  const [selectedFocusArea, setSelectedFocusArea] = useState('Core Fundamentals & Architecture');
+  const [selectedQuestionCount, setSelectedQuestionCount] = useState(3);
   const [selectedJobId, setSelectedJobId] = useState('');
-  const [isCustomJob, setIsCustomJob] = useState(false);
 
   // Session state
   const [sessionActive, setSessionActive] = useState(false);
@@ -43,18 +91,33 @@ export default function MockInterview() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [evaluations, setEvaluations] = useState([]);
+  const [intermissionItem, setIntermissionItem] = useState(null);
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isSavingScore, setIsSavingScore] = useState(false);
   const [isScoreSaved, setIsScoreSaved] = useState(false);
+  const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
+  const [hasCustomKey, setHasCustomKey] = useState(false);
+
+  useEffect(() => {
+    setHasCustomKey(!!localStorage.getItem('recruitloop_gemini_api_key'));
+  }, [isAiSettingsOpen]);
 
   const recognitionRef = useRef(null);
 
   // Determine active track title
-  const activeRoleTitle = isCustomJob 
-    ? jobs.find(j => j.id === selectedJobId)?.title || 'Campus SDE Opening'
-    : MOCK_INTERVIEW_ROLES[selectedRoleKey]?.title || 'Technical SDE';
+  const activeRoleTitle = interviewMode === 'custom'
+    ? (customDomainText.trim() || 'Custom Tech Specialization')
+    : interviewMode === 'campus-job'
+    ? (jobs.find(j => j.id === selectedJobId)?.title || 'Campus Placement Role')
+    : (INTERVIEW_DOMAINS.find(d => d.id === selectedDomainKey)?.title || 'Technical SDE');
+
+  const filteredDomains = INTERVIEW_DOMAINS.filter(d => 
+    d.title.toLowerCase().includes(domainSearchQuery.toLowerCase()) ||
+    d.desc.toLowerCase().includes(domainSearchQuery.toLowerCase()) ||
+    d.tags.some(t => t.toLowerCase().includes(domainSearchQuery.toLowerCase()))
+  );
 
   const currentQuestion = activeQuestions[currentQuestionIndex];
 
@@ -121,52 +184,122 @@ export default function MockInterview() {
     return `${mins.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
   };
 
+  const generateLocalFallbackQuestions = (domainTitle, difficulty, count = 3) => {
+    const list = [
+      {
+        id: 1,
+        question: `In ${domainTitle}, how do you architect a production-ready system to ensure low latency and high availability under sudden traffic spikes?`,
+        idealPoints: 'Discuss modular service boundaries, horizontal scaling, caching layers (Redis/CDN), connection pooling, and graceful degradation.'
+      },
+      {
+        id: 2,
+        question: `What are the most common concurrency bugs or memory bottlenecks in ${domainTitle}, and what diagnostic tools and patterns do you use to resolve them?`,
+        idealPoints: 'Explain profiling tools (memory heap dumps, CPU profilers), locking strategies, asynchronous non-blocking I/O, and race condition prevention.'
+      },
+      {
+        id: 3,
+        question: `Walk through an architectural trade-off you encountered in ${domainTitle} between immediate consistency, eventual consistency, and engineering complexity.`,
+        idealPoints: 'Evaluate CAP theorem nuances, idempotency keys, distributed transaction patterns (Saga vs 2PC), and business impact.'
+      },
+      {
+        id: 4,
+        question: `How do you approach end-to-end security, input sanitization, and defense-in-depth principles when shipping in ${domainTitle}?`,
+        idealPoints: 'Detail OWASP best practices, JWT/OAuth token verification, SQLi/XSS mitigation, least-privilege RBAC, and secrets rotation.'
+      },
+      {
+        id: 5,
+        question: `Describe a recent architectural evolution, framework, or standard in the ${domainTitle} ecosystem and how it improves on prior approaches.`,
+        idealPoints: 'Demonstrate deep knowledge of modern industry trends, developer ergonomics, build optimizations, and trade-offs.'
+      },
+      {
+        id: 6,
+        question: `How do you structure comprehensive automated testing (unit, integration, contract, and stress testing) for critical systems in ${domainTitle}?`,
+        idealPoints: 'Discuss mocking strategies, test flakiness prevention, CI/CD automated gates, load testing tools, and code coverage metrics.'
+      },
+      {
+        id: 7,
+        question: `When diagnosing an intermittent production incident in a ${domainTitle} deployment, what is your step-by-step troubleshooting methodology?`,
+        idealPoints: 'Walk through structured log correlation, APM distributed tracing, metrics dashboards, rollback vs hotfix decisions, and post-mortems.'
+      }
+    ];
+    const shuffled = [...list].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count).map((q, idx) => ({ ...q, id: idx + 1 }));
+  };
+
   const startSession = async () => {
     setIsGeneratingQuestions(true);
     let questionsToUse = [];
+    const count = selectedQuestionCount || 3;
 
-    if (isCustomJob && selectedJobId) {
-      const targetJob = jobs.find(j => j.id === selectedJobId);
-      try {
+    try {
+      if (interviewMode === 'campus-job') {
+        const targetJob = jobs.find(j => j.id === selectedJobId) || jobs[0];
         const res = await api.generateInterviewQuestions({
           roleTitle: targetJob?.title || 'Software Engineer',
           companyName: targetJob?.companyName || 'Campus Recruiter',
           jobDescription: targetJob?.description || '',
-          count: 3
+          difficulty: selectedDifficulty,
+          focusArea: selectedFocusArea,
+          count
         });
         if (res?.questions && res.questions.length > 0) {
           questionsToUse = res.questions;
+        } else {
+          questionsToUse = generateLocalFallbackQuestions(`${targetJob?.companyName || 'Campus'} - ${targetJob?.title || 'Software Engineer'}`, selectedDifficulty, count);
         }
-      } catch (err) {
-        console.warn('Falling back to local questions:', err);
-      }
-
-      if (questionsToUse.length === 0) {
-        questionsToUse = [
-          {
-            id: 1,
-            question: `How would you architect a core feature for ${targetJob?.companyName || 'this role'} based on the requirements of ${targetJob?.title}?`,
-            idealPoints: 'Discuss component architecture, data flow, failure resilience, and latency minimization.'
-          },
-          {
-            id: 2,
-            question: `Which data structures or database schemas would you design to handle high concurrent queries for ${targetJob?.title}?`,
-            idealPoints: 'Explain indexing, normalization vs denormalization, caching with Redis, and asymptotic complexity.'
-          },
-          {
-            id: 3,
-            question: 'Walk through a challenging bug you encountered in a real-world project and how you isolated its root cause.',
-            idealPoints: 'Highlight debugging methodologies, logging, reproductive steps, and post-mortem unit tests.'
+      } else if (interviewMode === 'custom') {
+        const customTitle = customDomainText.trim() || 'Custom Technology Specialization';
+        const res = await api.generateInterviewQuestions({
+          domain: 'custom',
+          customDomain: customTitle,
+          roleTitle: customTitle,
+          difficulty: selectedDifficulty,
+          focusArea: selectedFocusArea,
+          count
+        });
+        if (res?.questions && res.questions.length > 0) {
+          questionsToUse = res.questions;
+        } else {
+          questionsToUse = generateLocalFallbackQuestions(customTitle, selectedDifficulty, count);
+        }
+      } else {
+        const domainObj = INTERVIEW_DOMAINS.find(d => d.id === selectedDomainKey) || INTERVIEW_DOMAINS[0];
+        const res = await api.generateInterviewQuestions({
+          domain: domainObj.id,
+          roleTitle: domainObj.title,
+          difficulty: selectedDifficulty,
+          focusArea: selectedFocusArea,
+          count
+        });
+        if (res?.questions && res.questions.length > 0) {
+          questionsToUse = res.questions;
+        } else {
+          if (MOCK_INTERVIEW_ROLES[selectedDomainKey]?.questions?.length > 0) {
+            const roleQs = [...MOCK_INTERVIEW_ROLES[selectedDomainKey].questions].sort(() => Math.random() - 0.5);
+            questionsToUse = roleQs.slice(0, count);
+          } else {
+            questionsToUse = generateLocalFallbackQuestions(domainObj.title, selectedDifficulty, count);
           }
-        ];
+        }
       }
-    } else {
-      questionsToUse = MOCK_INTERVIEW_ROLES[selectedRoleKey]?.questions || [];
+    } catch (err) {
+      console.warn('AI Question generation fallback triggered:', err);
+      const title = interviewMode === 'custom'
+        ? (customDomainText.trim() || 'Custom Technology')
+        : interviewMode === 'campus-job'
+        ? (jobs.find(j => j.id === selectedJobId)?.title || 'Campus Placement Role')
+        : (INTERVIEW_DOMAINS.find(d => d.id === selectedDomainKey)?.title || 'Full-Stack Web Development');
+      questionsToUse = generateLocalFallbackQuestions(title, selectedDifficulty, count);
+    }
+
+    if (!questionsToUse || questionsToUse.length === 0) {
+      questionsToUse = generateLocalFallbackQuestions('Full-Stack Web Development', selectedDifficulty, count);
     }
 
     setActiveQuestions(questionsToUse);
     setCurrentQuestionIndex(0);
     setEvaluations([]);
+    setIntermissionItem(null);
     setUserAnswer('');
     setTimerSeconds(0);
     setIsScoreSaved(false);
@@ -270,12 +403,21 @@ export default function MockInterview() {
           question: currentQuestion,
           answer: userAnswer,
           score: res.evaluation.score || 80,
-          feedback: res.evaluation.conceptualFeedback || 'Well formulated technical explanation.',
+          technicalAccuracy: res.evaluation.technicalAccuracy ?? res.evaluation.score ?? 80,
+          depthScore: res.evaluation.depthScore ?? 80,
+          feedback: res.evaluation.feedback || res.evaluation.conceptualFeedback || 'Well formulated technical explanation.',
           strengths: res.evaluation.strengths || ['Good structure', 'Relevant vocabulary'],
-          improvements: res.evaluation.improvements || ['Include quantifiable benchmarks'],
-          modelAnswer: res.evaluation.modelAnswer || currentQuestion.idealPoints
+          improvements: res.evaluation.improvements || ['Include quantifiable benchmarks or edge-case constraints'],
+          modelAnswer: res.evaluation.modelAnswer || currentQuestion.idealPoints,
+          interviewerFollowUp: res.evaluation.interviewerFollowUp || null
         };
         setEvaluations(prev => [...prev, evalItem]);
+        setIntermissionItem(evalItem);
+        if (autoSpeak && evalItem.feedback) {
+          setTimeout(() => {
+            speakQuestion(evalItem.feedback);
+          }, 350);
+        }
       } else {
         throw new Error('Fallback to local');
       }
@@ -286,22 +428,35 @@ export default function MockInterview() {
         question: currentQuestion,
         answer: userAnswer,
         score: evalResult.score,
+        technicalAccuracy: evalResult.score,
+        depthScore: Math.min(100, Math.round(evalResult.score * 0.95)),
         feedback: evalResult.feedback,
         strengths: evalResult.strengths,
         improvements: evalResult.improvements,
-        modelAnswer: currentQuestion.idealPoints
+        modelAnswer: currentQuestion.idealPoints,
+        interviewerFollowUp: null
       };
       setEvaluations(prev => [...prev, evalItem]);
+      setIntermissionItem(evalItem);
+      if (autoSpeak && evalItem.feedback) {
+        setTimeout(() => {
+          speakQuestion(evalItem.feedback);
+        }, 350);
+      }
     } finally {
       setIsEvaluating(false);
+    }
+  };
 
-      if (currentQuestionIndex + 1 < activeQuestions.length) {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setUserAnswer('');
-      } else {
-        setSessionCompleted(true);
-        setSessionActive(false);
-      }
+  const handleContinueToNextQuestion = () => {
+    stopSpeaking();
+    setIntermissionItem(null);
+    setUserAnswer('');
+    if (currentQuestionIndex + 1 < activeQuestions.length) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      setSessionCompleted(true);
+      setSessionActive(false);
     }
   };
 
@@ -351,12 +506,28 @@ export default function MockInterview() {
           </p>
         </div>
 
-        {!sessionActive && !sessionCompleted && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsAiSettingsOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50/50 text-slate-700 text-xs font-bold transition-all flex items-center gap-2"
+          >
+            <Key className="w-3.5 h-3.5 text-indigo-600" />
+            <span>AI Key Config</span>
+            {hasCustomKey && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Custom Gemini Key Connected" />
+            )}
+          </button>
+
+          {!sessionActive && !sessionCompleted && (
             <button
               onClick={startSession}
-              disabled={isGeneratingQuestions || (isCustomJob && !selectedJobId)}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
+              disabled={
+                isGeneratingQuestions || 
+                (interviewMode === 'campus-job' && !selectedJobId && jobs.length > 0) || 
+                (interviewMode === 'custom' && !customDomainText.trim())
+              }
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
             >
               {isGeneratingQuestions ? (
                 <>
@@ -370,99 +541,363 @@ export default function MockInterview() {
                 </>
               )}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Track & Target Role Selection (Only before active session) */}
       {!sessionActive && !sessionCompleted && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+            
+            {/* Header + Mode Switcher */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Choose Your Interview Track</h3>
-                <p className="text-xs text-slate-500">Practice standard industry tracks or prepare for active campus company drives</p>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <span>Step 1: Choose Your Interview Domain</span>
+                  <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    Real AI Generation
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pick a specialized technical domain, enter any custom technology stack, or target active campus recruitment drives
+                </p>
               </div>
 
-              {/* Mode Toggle */}
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+              {/* 3 Modes Tab Switcher */}
+              <div className="flex flex-wrap items-center bg-slate-100 p-1 rounded-xl text-xs font-semibold gap-1">
                 <button
                   type="button"
-                  onClick={() => setIsCustomJob(false)}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    !isCustomJob ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  onClick={() => setInterviewMode('domain')}
+                  className={`px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
+                    interviewMode === 'domain'
+                      ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Standard Industry Tracks
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Browse Domains (15+)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInterviewMode('custom')}
+                  className={`px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
+                    interviewMode === 'custom'
+                      ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-violet-600" />
+                  <span>Custom Tech Specialization</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setIsCustomJob(true);
+                    setInterviewMode('campus-job');
                     if (!selectedJobId && jobs.length > 0) setSelectedJobId(jobs[0].id);
                   }}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    isCustomJob ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  className={`px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
+                    interviewMode === 'campus-job'
+                      ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Active Campus Openings ({jobs.length})
+                  <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Campus Placement Drives ({jobs.length})</span>
                 </button>
               </div>
             </div>
 
-            {/* Standard Tracks Grid */}
-            {!isCustomJob ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-                {Object.entries(MOCK_INTERVIEW_ROLES).map(([key, r]) => (
-                  <div
-                    key={key}
-                    onClick={() => setSelectedRoleKey(key)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                      selectedRoleKey === key
-                        ? 'border-indigo-600 bg-indigo-50/50 shadow-xs ring-1 ring-indigo-500'
-                        : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="font-bold text-xs text-slate-900 mb-1">{r.title}</div>
-                    <div className="text-[11px] text-slate-500">{r.questions.length} core technical questions with audio synthesis</div>
+            {/* TAB 1: Curated Tech Domains */}
+            {interviewMode === 'domain' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <span>Available Engineering Fields</span>
+                    <span className="text-slate-400 font-normal">({filteredDomains.length} of {INTERVIEW_DOMAINS.length} tracks)</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              /* Campus Openings Dropdown / Selector */
-              <div className="space-y-3 pt-1">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Select Campus Placement Opening:</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {jobs.map((job) => (
-                    <div
-                      key={job.id}
-                      onClick={() => setSelectedJobId(job.id)}
-                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                        selectedJobId === job.id
-                          ? 'border-indigo-600 bg-indigo-50/50 shadow-xs ring-1 ring-indigo-500'
-                          : 'border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-slate-900">{job.title}</span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                          {job.package || 'Campus Drive'}
-                        </span>
+                  
+                  {/* Search filter */}
+                  <div className="relative w-full sm:w-72">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={domainSearchQuery}
+                      onChange={(e) => setDomainSearchQuery(e.target.value)}
+                      placeholder="Search domain e.g. React, DevOps, AI..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                    />
+                    {domainSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setDomainSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-slate-600"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 max-h-[380px] overflow-y-auto pr-1">
+                  {filteredDomains.map((dom) => {
+                    const isSelected = selectedDomainKey === dom.id;
+                    return (
+                      <div
+                        key={dom.id}
+                        onClick={() => setSelectedDomainKey(dom.id)}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all relative flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-50/60 shadow-sm ring-2 ring-indigo-500/80'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/70'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">{dom.icon}</span>
+                              <h4 className="font-bold text-xs text-slate-900 leading-snug">{dom.title}</h4>
+                            </div>
+                            {isSelected && (
+                              <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                            {dom.desc}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 mt-3">
+                          {dom.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className={`text-[9px] font-semibold px-2 py-0.5 rounded-md ${
+                                isSelected
+                                  ? 'bg-indigo-100/70 text-indigo-700'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <div className="text-[11px] text-indigo-600 font-semibold mt-1">
-                        {job.companyName}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-1 line-clamp-1">
-                        Skills: {(job.requiredSkills || []).slice(0, 3).join(', ')}
-                      </div>
+                    );
+                  })}
+                  {filteredDomains.length === 0 && (
+                    <div className="col-span-full py-8 text-center text-slate-400 text-xs">
+                      No domains match your search query "{domainSearchQuery}". Try another keyword or switch to the Custom Specialization tab!
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             )}
+
+            {/* TAB 2: Custom Specialization (Type Any Tech) */}
+            {interviewMode === 'custom' && (
+              <div className="space-y-4 bg-gradient-to-br from-indigo-50/40 via-purple-50/30 to-white p-5 rounded-xl border border-indigo-100">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-violet-600" />
+                    <span>Enter Any Custom Technology, Stack, or Engineering Role</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Target any framework, language, or system topic. Real Gemini AI will dynamically synthesize fresh, customized interview questions for this exact domain.
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customDomainText}
+                    onChange={(e) => setCustomDomainText(e.target.value)}
+                    placeholder="e.g. Rust Systems Programming, Flutter App Architecture, Kafka Event Streaming, Kubernetes Operator..."
+                    className="w-full px-4 py-3 bg-white border-2 border-indigo-200 focus:border-indigo-600 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 shadow-inner focus:outline-none transition-all placeholder:text-slate-400"
+                  />
+                  {customDomainText && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomDomainText('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 font-bold px-1.5 py-0.5"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-[11px] font-bold text-slate-600 mb-2 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Or click a popular specialization preset:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CUSTOM_DOMAIN_SUGGESTIONS.map((sug) => (
+                      <button
+                        key={sug}
+                        type="button"
+                        onClick={() => setCustomDomainText(sug)}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all ${
+                          customDomainText === sug
+                            ? 'bg-violet-600 text-white border-violet-600 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-violet-300 hover:bg-violet-50/50'
+                        }`}
+                      >
+                        + {sug}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: Campus Placement Openings */}
+            {interviewMode === 'campus-job' && (
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Select Active Campus Drive Opening:</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {jobs.map((job) => {
+                    const isSelected = selectedJobId === job.id;
+                    return (
+                      <div
+                        key={job.id}
+                        onClick={() => setSelectedJobId(job.id)}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all relative ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-50/60 shadow-sm ring-2 ring-indigo-500/80'
+                            : 'border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs text-slate-900">{job.title}</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            {job.package || 'Campus Drive'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-indigo-600 font-semibold mt-1">
+                          {job.companyName}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-1 line-clamp-1">
+                          Skills: {(job.requiredSkills || []).slice(0, 3).join(', ')}
+                        </div>
+                        {isSelected && (
+                          <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Interview Round Settings */}
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">Step 2: Calibrate Interview Settings</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Difficulty */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">Experience & Difficulty Level</label>
+                  <select
+                    value={selectedDifficulty}
+                    onChange={(e) => setSelectedDifficulty(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                  >
+                    <option value="Campus Graduate / Junior (0-2 Yrs)">Campus Graduate / Junior (0-2 Yrs)</option>
+                    <option value="Mid-Level Software Engineer (2-5 Yrs)">Mid-Level Software Engineer (2-5 Yrs)</option>
+                    <option value="Senior Staff / Principal Engineer (5+ Yrs)">Senior Staff / Principal Engineer (5+ Yrs)</option>
+                  </select>
+                </div>
+
+                {/* Focus Area */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">Evaluation Focus Area</label>
+                  <select
+                    value={selectedFocusArea}
+                    onChange={(e) => setSelectedFocusArea(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                  >
+                    <option value="Core Fundamentals & Architecture">Core Fundamentals & Architecture</option>
+                    <option value="Live Debugging & Edge Cases">Live Debugging & Edge Cases</option>
+                    <option value="Production Scalability & Resilience">Production Scalability & Resilience</option>
+                    <option value="Behavioral & STAR Leadership">Behavioral & STAR Leadership</option>
+                  </select>
+                </div>
+
+                {/* Question Count */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700">Round Length & Questions</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { count: 3, label: '3 Qs (10m)' },
+                      { count: 5, label: '5 Qs (20m)' },
+                      { count: 7, label: '7 Qs (30m)' }
+                    ].map((opt) => (
+                      <button
+                        key={opt.count}
+                        type="button"
+                        onClick={() => setSelectedQuestionCount(opt.count)}
+                        className={`py-2 text-xs font-bold rounded-xl border transition-all ${
+                          selectedQuestionCount === opt.count
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Launch Banner & Summary */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 rounded-xl text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center shrink-0">
+                  <Cpu className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <div className="text-xs text-indigo-300 font-semibold">Ready to begin simulation</div>
+                  <div className="text-sm font-bold text-white line-clamp-1">
+                    {activeRoleTitle} • {selectedDifficulty.split('(')[0]} • {selectedQuestionCount} Questions
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={startSession}
+                disabled={
+                  isGeneratingQuestions ||
+                  (interviewMode === 'campus-job' && !selectedJobId && jobs.length > 0) ||
+                  (interviewMode === 'custom' && !customDomainText.trim())
+                }
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white font-bold text-xs shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isGeneratingQuestions ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Synthesizing AI Questions...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>Launch AI Interview Simulation</span>
+                  </>
+                )}
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -520,117 +955,258 @@ export default function MockInterview() {
             </div>
           </div>
 
-          {/* Question Box with Speaker Avatar */}
-          <div className="p-5 rounded-2xl bg-indigo-50/70 border border-indigo-100 relative">
-            <div className="flex items-start gap-3.5">
-              <button
-                onClick={() => speakQuestion(currentQuestion.question)}
-                title="Click to replay question voice"
-                className={`p-3 rounded-2xl text-white shrink-0 shadow-md transition-all ${
-                  isSpeaking ? 'bg-indigo-700 ring-4 ring-indigo-300 scale-105' : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
-              >
-                <Volume2 className={`w-5 h-5 ${isSpeaking ? 'animate-bounce' : ''}`} />
-              </button>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">
-                    AI Senior Technical Interviewer:
-                  </span>
-                  {isSpeaking && (
-                    <span className="text-[10px] font-bold text-indigo-600 bg-white px-2 py-0.5 rounded-full border border-indigo-200 animate-pulse">
-                      ● Speaking question...
+          {/* AI Coach Intermission Card: Rendered immediately after submitting answer */}
+          {intermissionItem ? (
+            <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-50/90 via-purple-50/40 to-slate-50 border-2 border-indigo-200 space-y-6 animate-fadeIn shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-indigo-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
+                      Round {currentQuestionIndex + 1} Assessment
                     </span>
-                  )}
+                    <h3 className="text-base font-bold text-slate-950">
+                      AI Interviewer Real-Time Feedback
+                    </h3>
+                  </div>
                 </div>
-                <p className="text-sm font-semibold text-slate-900 leading-relaxed">
-                  {currentQuestion.question}
+
+                <div className="flex items-center gap-3">
+                  <div className="text-center px-3 py-1.5 rounded-xl bg-white border border-indigo-200 shadow-xs">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase block">Score</span>
+                    <span className="text-base font-black text-indigo-700">{intermissionItem.score}/100</span>
+                  </div>
+                  <div className="text-center px-3 py-1.5 rounded-xl bg-white border border-indigo-200 shadow-xs">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase block">Accuracy</span>
+                    <span className="text-base font-black text-emerald-600">{intermissionItem.technicalAccuracy}%</span>
+                  </div>
+                  <div className="text-center px-3 py-1.5 rounded-xl bg-white border border-indigo-200 shadow-xs">
+                    <span className="text-[10px] text-slate-500 font-semibold uppercase block">Depth</span>
+                    <span className="text-base font-black text-purple-600">{intermissionItem.depthScore}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Spoken AI Verbal Coach critique */}
+              <div className="p-4 rounded-xl bg-white border border-indigo-100 shadow-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Volume2 className="w-4 h-4 text-indigo-600" />
+                    <span>Interviewer Spoken Critique:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSpeaking) {
+                        stopSpeaking();
+                      } else {
+                        speakQuestion(intermissionItem.feedback);
+                      }
+                    }}
+                    className="text-xs font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1"
+                  >
+                    {isSpeaking ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Mute Coach Voice</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5" />
+                        <span>Listen Again</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed italic bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  "{intermissionItem.feedback}"
                 </p>
               </div>
-            </div>
-          </div>
 
-          {/* Student Answer Input with Voice Recording */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                <span>Your Technical Response:</span>
-                {isRecording && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                    <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
-                    Recording live microphone...
+              {/* Strengths & Improvements */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+                  <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Observed Technical Strengths</span>
                   </span>
-                )}
-              </label>
+                  <ul className="text-xs text-emerald-800 space-y-1.5 list-disc list-inside">
+                    {Array.isArray(intermissionItem.strengths) ? (
+                      intermissionItem.strengths.map((str, idx) => <li key={idx}>{str}</li>)
+                    ) : (
+                      <li>{intermissionItem.strengths}</li>
+                    )}
+                  </ul>
+                </div>
 
-              <button
-                type="button"
-                onClick={toggleRecording}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                  isRecording
-                    ? 'bg-rose-600 text-white animate-pulse shadow-md'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                }`}
-              >
-                {isRecording ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-rose-500" />}
-                <span>{isRecording ? 'Stop Recording' : 'Dictate with Voice'}</span>
-              </button>
-            </div>
+                <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2">
+                  <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <span>Targeted Polish & Gaps</span>
+                  </span>
+                  <ul className="text-xs text-amber-800 space-y-1.5 list-disc list-inside">
+                    {Array.isArray(intermissionItem.improvements) ? (
+                      intermissionItem.improvements.map((imp, idx) => <li key={idx}>{imp}</li>)
+                    ) : (
+                      <li>{intermissionItem.improvements}</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
 
-            <textarea
-              rows={5}
-              value={userAnswer}
-              onChange={(e) => setUserAnswer(e.target.value)}
-              placeholder="Explain your conceptual approach, core engineering trade-offs, algorithms, or practical implementation steps..."
-              className="w-full text-xs font-sans p-4 rounded-xl border border-slate-200 bg-slate-50/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed placeholder:text-slate-400"
-            />
-          </div>
-
-          {/* Hint accordion */}
-          {currentQuestion.idealPoints && (
-            <details className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <summary className="font-semibold text-indigo-700 cursor-pointer">
-                💡 Need a hint or core technical aspects to cover?
-              </summary>
-              <p className="mt-2 text-slate-600 leading-relaxed">
-                {currentQuestion.idealPoints}
-              </p>
-            </details>
-          )}
-
-          {/* Submit Action */}
-          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-            <button
-              onClick={() => {
-                if (window.confirm('Are you sure you want to end this interview session early?')) {
-                  stopSpeaking();
-                  stopRecording();
-                  setSessionActive(false);
-                }
-              }}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800"
-            >
-              Quit Interview
-            </button>
-
-            <button
-              onClick={handleSubmitAnswer}
-              disabled={isEvaluating || !userAnswer.trim()}
-              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 disabled:opacity-50"
-            >
-              {isEvaluating ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Grading with Gemini AI...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Submit Answer & Next Round</span>
-                </>
+              {/* Model Answer */}
+              {intermissionItem.modelAnswer && (
+                <div className="p-4 rounded-xl bg-indigo-50/60 border border-indigo-200/70 space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-800 block">
+                    Ideal Senior Architect Benchmark Answer:
+                  </span>
+                  <p className="text-xs text-indigo-950 leading-relaxed font-sans">
+                    {intermissionItem.modelAnswer}
+                  </p>
+                </div>
               )}
-            </button>
-          </div>
+
+              {/* Follow-up Question if Gemini provided one */}
+              {intermissionItem.interviewerFollowUp && (
+                <div className="p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-xs text-purple-900">
+                  <span className="font-bold block mb-1">⚡ Next-Level Follow-Up Thought:</span>
+                  {intermissionItem.interviewerFollowUp}
+                </div>
+              )}
+
+              {/* Continue button */}
+              <div className="flex items-center justify-end pt-2 border-t border-indigo-100">
+                <button
+                  type="button"
+                  onClick={handleContinueToNextQuestion}
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2"
+                >
+                  <span>
+                    {currentQuestionIndex + 1 < activeQuestions.length
+                      ? `Continue to Question ${currentQuestionIndex + 2} of ${activeQuestions.length}`
+                      : 'Finalize Interview & View Full Scorecard'}
+                  </span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Question Box with Speaker Avatar */}
+              <div className="p-5 rounded-2xl bg-indigo-50/70 border border-indigo-100 relative">
+                <div className="flex items-start gap-3.5">
+                  <button
+                    onClick={() => speakQuestion(currentQuestion.question)}
+                    title="Click to replay question voice"
+                    className={`p-3 rounded-2xl text-white shrink-0 shadow-md transition-all ${
+                      isSpeaking ? 'bg-indigo-700 ring-4 ring-indigo-300 scale-105' : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
+                  >
+                    <Volume2 className={`w-5 h-5 ${isSpeaking ? 'animate-bounce' : ''}`} />
+                  </button>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">
+                        AI Senior Technical Interviewer:
+                      </span>
+                      {isSpeaking && (
+                        <span className="text-[10px] font-bold text-indigo-600 bg-white px-2 py-0.5 rounded-full border border-indigo-200 animate-pulse">
+                          ● Speaking question...
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold text-slate-900 leading-relaxed">
+                      {currentQuestion.question}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Student Answer Input with Voice Recording */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                    <span>Your Technical Response:</span>
+                    {isRecording && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                        <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+                        Recording live microphone...
+                      </span>
+                    )}
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      isRecording
+                        ? 'bg-rose-600 text-white animate-pulse shadow-md'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    {isRecording ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-rose-500" />}
+                    <span>{isRecording ? 'Stop Recording' : 'Dictate with Voice'}</span>
+                  </button>
+                </div>
+
+                <textarea
+                  rows={5}
+                  value={userAnswer}
+                  onChange={(e) => setUserAnswer(e.target.value)}
+                  placeholder="Explain your conceptual approach, core engineering trade-offs, algorithms, or practical implementation steps..."
+                  className="w-full text-xs font-sans p-4 rounded-xl border border-slate-200 bg-slate-50/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Hint accordion */}
+              {currentQuestion.idealPoints && (
+                <details className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <summary className="font-semibold text-indigo-700 cursor-pointer">
+                    💡 Need a hint or core technical aspects to cover?
+                  </summary>
+                  <p className="mt-2 text-slate-600 leading-relaxed">
+                    {currentQuestion.idealPoints}
+                  </p>
+                </details>
+              )}
+
+              {/* Submit Action */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to end this interview session early?')) {
+                      stopSpeaking();
+                      stopRecording();
+                      setSessionActive(false);
+                    }
+                  }}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                >
+                  Quit Interview
+                </button>
+
+                <button
+                  onClick={handleSubmitAnswer}
+                  disabled={isEvaluating || !userAnswer.trim()}
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isEvaluating ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Grading with Gemini AI...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Submit Answer & Next Round</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
 
         </div>
       )}
@@ -764,6 +1340,13 @@ export default function MockInterview() {
 
         </div>
       )}
+
+      {/* AI Settings Modal */}
+      <AiSettingsModal
+        isOpen={isAiSettingsOpen}
+        onClose={() => setIsAiSettingsOpen(false)}
+        onKeyUpdated={() => setHasCustomKey(!!localStorage.getItem('recruitloop_gemini_api_key'))}
+      />
 
     </div>
   );

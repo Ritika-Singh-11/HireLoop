@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import BrandLogo from '../common/BrandLogo';
 import {
   Sparkles,
   GraduationCap,
@@ -44,11 +45,14 @@ export default function WelcomeGate({ targetRole }) {
 
         <div className="relative z-10 space-y-5 max-w-2xl">
           
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-bold tracking-wide">
-            {isStudent && <GraduationCap className="w-3.5 h-3.5 text-indigo-300" />}
-            {isRecruiter && <Briefcase className="w-3.5 h-3.5 text-emerald-300" />}
-            {isAdmin && <ShieldCheck className="w-3.5 h-3.5 text-purple-300" />}
-            <span className="uppercase">{role} Authentication Required</span>
+          <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-white/10">
+            <BrandLogo size="md" subtitle="Campus Recruitment & Placement Directorate" textClassName="text-white" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-bold tracking-wide">
+              {isStudent && <GraduationCap className="w-3.5 h-3.5 text-indigo-300" />}
+              {isRecruiter && <Briefcase className="w-3.5 h-3.5 text-emerald-300" />}
+              {isAdmin && <ShieldCheck className="w-3.5 h-3.5 text-purple-300" />}
+              <span className="uppercase">{role} Authentication Required</span>
+            </div>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">

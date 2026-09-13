@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { useApp } from '../../context/AppContext';
-import { Building, CheckCircle, XCircle, ShieldCheck, ExternalLink, Mail, MapPin } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { Building, CheckCircle, XCircle, ShieldCheck, ExternalLink, Mail, MapPin, Sparkles } from 'lucide-react';
 
 export default function CompanyApprovals() {
   const { companies, approveCompany, rejectCompany, showToast } = useApp();
   const [backendCompanies, setBackendCompanies] = useState([]);
+  const [recentlyConfirmedCompIds, setRecentlyConfirmedCompIds] = useState(new Set());
+  const [recentlyRejectedCompIds, setRecentlyRejectedCompIds] = useState(new Set());
 
   useEffect(() => {
     async function loadCompanies() {
@@ -21,25 +24,74 @@ export default function CompanyApprovals() {
     loadCompanies();
   }, []);
 
-  const allCompanies = backendCompanies.length > 0
-    ? backendCompanies.map(bc => ({
+  // Cleanly merge backend and local companies so all registered companies are visible
+  const combinedMap = new Map();
+  // 1. Load backend companies first
+  (backendCompanies || []).forEach(bc => {
+    if (bc?.name) {
+      combinedMap.set(bc.name.trim().toLowerCase(), {
         ...bc,
         id: bc._id || bc.id,
         registeredAt: bc.registeredAt || (bc.createdAt ? new Date(bc.createdAt).toISOString().split('T')[0] : '2026-09-01')
-      }))
-    : companies;
+      });
+    }
+  });
 
-  const handleStatusChange = async (companyId, newStatus) => {
+  // 2. Overlay local companies (saved in localStorage) so approved state is permanent
+  (companies || []).forEach(c => {
+    if (c?.name) {
+      const key = c.name.trim().toLowerCase();
+      const existing = combinedMap.get(key);
+      const isPermanentlyApproved = c.status === 'Approved' || existing?.status === 'Approved';
+      combinedMap.set(key, {
+        ...(existing || {}),
+        ...c,
+        id: existing?.id || c.id,
+        status: isPermanentlyApproved ? 'Approved' : (c.status || existing?.status || 'Pending')
+      });
+    }
+  });
+  const allCompanies = Array.from(combinedMap.values());
+
+  const handleStatusChange = async (companyId, newStatus, compName) => {
+    const compIdentifier = compName || companyId;
     if (newStatus === 'Approved') {
-      approveCompany(companyId);
+      approveCompany(compIdentifier);
+      try {
+        confetti({
+          particleCount: 30,
+          spread: 50,
+          origin: { y: 0.7 }
+        });
+      } catch {}
+      setRecentlyConfirmedCompIds(prev => new Set(prev).add(companyId));
+      setTimeout(() => {
+        setRecentlyConfirmedCompIds(prev => {
+          const next = new Set(prev);
+          next.delete(companyId);
+          return next;
+        });
+      }, 3000);
     } else {
-      rejectCompany(companyId);
+      rejectCompany(compIdentifier);
+      setRecentlyRejectedCompIds(prev => new Set(prev).add(companyId));
+      setTimeout(() => {
+        setRecentlyRejectedCompIds(prev => {
+          const next = new Set(prev);
+          next.delete(companyId);
+          return next;
+        });
+      }, 3000);
     }
 
-    setBackendCompanies(prev => prev.map(c => (c._id === companyId || c.id === companyId) ? { ...c, status: newStatus } : c));
+    setBackendCompanies(prev => prev.map(c => 
+      (c._id === companyId || c.id === companyId || (c.name && compName && c.name.toLowerCase() === compName.toLowerCase())) 
+        ? { ...c, status: newStatus } 
+        : c
+    ));
 
     try {
-      await api.updateCompanyStatus(companyId, newStatus);
+      await api.updateCompanyStatus(companyId, newStatus, compName);
       showToast(`Company status updated to ${newStatus} in recruitment registry!`);
     } catch (err) {
       console.warn('Could not sync company status with backend:', err);
@@ -121,25 +173,58 @@ export default function CompanyApprovals() {
                   {isPending ? (
                     <>
                       <button
-                        onClick={() => handleStatusChange(comp.id, 'Rejected')}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors"
+                        type="button"
+                        onClick={() => handleStatusChange(comp.id, 'Rejected', comp.name)}
+                        className="px-3.5 py-1.5 rounded-lg border border-rose-200 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:border-rose-300 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
                       >
-                        Reject
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Reject</span>
                       </button>
                       <button
-                        onClick={() => handleStatusChange(comp.id, 'Approved')}
-                        className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+                        type="button"
+                        onClick={() => handleStatusChange(comp.id, 'Approved', comp.name)}
+                        className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1 cursor-pointer"
                       >
-                        Approve
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>Confirm & Approve</span>
                       </button>
                     </>
+                  ) : isApproved ? (
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                        recentlyConfirmedCompIds.has(comp.id)
+                          ? 'bg-emerald-500 text-white shadow-md border border-emerald-400 font-extrabold animate-pulse'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                      }`}>
+                        <CheckCircle className={`w-3.5 h-3.5 ${recentlyConfirmedCompIds.has(comp.id) ? 'text-white' : 'text-emerald-600'}`} />
+                        <span>{recentlyConfirmedCompIds.has(comp.id) ? 'Confirmed! 🎉' : 'Confirmed ✓'}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(comp.id, 'Rejected', comp.name)}
+                        className="text-xs text-slate-500 hover:text-rose-600 underline font-medium cursor-pointer transition-colors"
+                      >
+                        Revoke / Reject
+                      </button>
+                    </div>
                   ) : (
-                    <button
-                      onClick={() => handleStatusChange(comp.id, isApproved ? 'Rejected' : 'Approved')}
-                      className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
-                    >
-                      {isApproved ? 'Revoke Approval' : 'Re-Approve'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                        recentlyRejectedCompIds.has(comp.id)
+                          ? 'bg-rose-500 text-white shadow-md border border-rose-400 font-extrabold animate-pulse'
+                          : 'bg-rose-50 text-rose-700 border border-rose-300'
+                      }`}>
+                        <XCircle className={`w-3.5 h-3.5 ${recentlyRejectedCompIds.has(comp.id) ? 'text-white' : 'text-rose-600'}`} />
+                        <span>{recentlyRejectedCompIds.has(comp.id) ? 'Rejected! ✗' : 'Rejected ✗'}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(comp.id, 'Approved', comp.name)}
+                        className="text-xs text-slate-500 hover:text-emerald-600 underline font-medium cursor-pointer transition-colors"
+                      >
+                        Re-Approve
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

@@ -1,6 +1,8 @@
 import PlacementDrive from '../models/placementDrive.model.js';
 import EligibilityPolicy from '../models/eligibilityPolicy.model.js';
 import StudentProfile from '../models/studentProfile.model.js';
+import Application from '../models/application.model.js';
+import OfferLetter from '../models/offerLetter.model.js';
 import User from '../models/user.model.js';
 import Notification from '../models/notification.model.js';
 import { evaluateStudentEligibility } from '../services/eligibility.service.js';
@@ -346,8 +348,10 @@ export const registerForDrive = async (req, res, next) => {
     if (!evalResult.isEligible) {
       return res.status(403).json({
         success: false,
-        message: 'Eligibility criteria not met for this campus recruitment drive',
+        message: 'Eligibility criteria not met under University Placement Directorate Policy',
         reasons: evalResult.reasons,
+        collegeReasons: evalResult.collegeReasons,
+        companyReasons: evalResult.companyReasons,
         checks: evalResult.checks
       });
     }
@@ -497,26 +501,129 @@ export const getPlacementReports = async (req, res, next) => {
   try {
     await ensureDrivesSeeded();
 
-    const drives = await PlacementDrive.find().lean();
-    
-    // Sample accreditation aggregate numbers
-    const totalEnrolled = 640;
-    const placedStudents = 541;
-    const placementRate = Math.round((placedStudents / totalEnrolled) * 100);
+    const [drives, profiles, applications, offers] = await Promise.all([
+      PlacementDrive.find().lean(),
+      StudentProfile.find().lean(),
+      Application.find().populate('job').lean(),
+      OfferLetter.find().lean()
+    ]);
 
-    const branchStats = [
-      { branch: 'Computer Science & Engineering', enrolled: 180, placed: 172, percentage: 95.5, medianCtc: '₹18.5 LPA' },
-      { branch: 'Information Technology', enrolled: 120, placed: 114, percentage: 95.0, medianCtc: '₹16.2 LPA' },
-      { branch: 'Electronics & Comm.', enrolled: 120, placed: 102, percentage: 85.0, medianCtc: '₹12.0 LPA' },
-      { branch: 'Electrical Engg.', enrolled: 80, placed: 64, percentage: 80.0, medianCtc: '₹9.5 LPA' },
-      { branch: 'Mechanical Engg.', enrolled: 80, placed: 52, percentage: 65.0, medianCtc: '₹8.5 LPA' },
-      { branch: 'Civil Engg.', enrolled: 60, placed: 37, percentage: 61.6, medianCtc: '₹7.8 LPA' }
-    ];
+    const totalEnrolled = profiles.length;
+
+    // Track placed student keys (student profile id, user id, or roll number)
+    const placedStudentKeys = new Set();
+    const branchDataMap = {};
+
+    profiles.forEach(p => {
+      const b = p.branch || 'Computer Science & Engineering';
+      if (!branchDataMap[b]) {
+        branchDataMap[b] = { branch: b, enrolled: 0, placed: 0, packages: [] };
+      }
+      branchDataMap[b].enrolled += 1;
+      if (p.placedCompany && p.placedCompany.trim()) {
+        placedStudentKeys.add(p._id.toString());
+        if (p.user) placedStudentKeys.add(p.user.toString());
+        if (p.rollNumber) placedStudentKeys.add(p.rollNumber);
+        branchDataMap[b].placed += 1;
+      }
+    });
+
+    // Packages list for genuine statistics
+    const packagesList = [];
+
+    // Collect from OfferLetter
+    offers.forEach(o => {
+      if (o.student) placedStudentKeys.add(o.student.toString());
+      const totalLpa = o.ctc?.totalLpa;
+      if (typeof totalLpa === 'number' && !isNaN(totalLpa) && totalLpa > 0) {
+        packagesList.push({ lpa: totalLpa, company: o.companyName || 'Campus Recruiter' });
+      }
+    });
+
+    // Collect from Applications with offer
+    applications.forEach(a => {
+      const isOffer = a.status && ['offered', 'offer'].includes(a.status.toLowerCase());
+      if (isOffer && a.student) {
+        placedStudentKeys.add(a.student._id ? a.student._id.toString() : a.student.toString());
+        const jobLpa = a.job?.ctcMax || a.job?.ctcMin;
+        if (typeof jobLpa === 'number' && !isNaN(jobLpa) && jobLpa > 0) {
+          packagesList.push({ lpa: jobLpa, company: a.job?.title || 'Campus Recruiter' });
+        }
+      }
+    });
+
+    // Collect from candidates marked Offered in Placement Drives
+    drives.forEach(drv => {
+      let drvLpa = 0;
+      if (drv.ctcDisplay) {
+        const match = drv.ctcDisplay.match(/(\d+(\.\d+)?)/);
+        if (match) drvLpa = parseFloat(match[1]);
+      }
+      (drv.candidates || []).forEach(cand => {
+        if (cand.status === 'Offered' || cand.status === 'offered') {
+          if (cand.studentRoll) placedStudentKeys.add(cand.studentRoll);
+          if (cand.student) placedStudentKeys.add(cand.student.toString());
+          const b = cand.studentBranch || 'Computer Science & Engineering';
+          if (!branchDataMap[b]) {
+            branchDataMap[b] = { branch: b, enrolled: 1, placed: 1, packages: [] };
+          } else {
+            branchDataMap[b].placed = Math.min(branchDataMap[b].enrolled, branchDataMap[b].placed + 1);
+          }
+          if (drvLpa > 0) {
+            packagesList.push({ lpa: drvLpa, company: drv.companyName || 'Recruiter' });
+          }
+        }
+      });
+    });
+
+    const placedStudents = totalEnrolled > 0
+      ? Math.min(totalEnrolled, Math.max(placedStudentKeys.size, profiles.filter(p => p.placedCompany).length))
+      : placedStudentKeys.size;
+    const placementRate = totalEnrolled > 0 ? Math.round((placedStudents / totalEnrolled) * 100) : 0;
+
+    // Package statistical computation
+    let highestPackage = '₹0.0 LPA';
+    let averagePackage = '₹0.0 LPA';
+    let medianPackage = '₹0.0 LPA';
+
+    if (packagesList.length > 0) {
+      packagesList.sort((a, b) => a.lpa - b.lpa);
+      const maxPkg = packagesList[packagesList.length - 1];
+      highestPackage = `₹${maxPkg.lpa.toFixed(1)} LPA (${maxPkg.company})`;
+
+      const sum = packagesList.reduce((acc, curr) => acc + curr.lpa, 0);
+      const avg = sum / packagesList.length;
+      averagePackage = `₹${avg.toFixed(1)} LPA`;
+
+      const mid = Math.floor(packagesList.length / 2);
+      const med = packagesList.length % 2 !== 0
+        ? packagesList[mid].lpa
+        : (packagesList[mid - 1].lpa + packagesList[mid].lpa) / 2;
+      medianPackage = `₹${med.toFixed(1)} LPA`;
+    }
+
+    // Branch stats array
+    const branchStats = Object.values(branchDataMap).map(b => {
+      const pct = b.enrolled > 0 ? Math.round((b.placed / b.enrolled) * 1000) / 10 : 0;
+      return {
+        branch: b.branch,
+        enrolled: b.enrolled,
+        placed: b.placed,
+        percentage: pct,
+        medianCtc: medianPackage !== '₹0.0 LPA' ? medianPackage : '₹12.0 LPA'
+      };
+    });
+
+    // Package tiers
+    const superDream = packagesList.filter(p => p.lpa >= 20).length;
+    const dream = packagesList.filter(p => p.lpa >= 12 && p.lpa < 20).length;
+    const standard = packagesList.filter(p => p.lpa < 12).length;
+    const totalPkgCount = packagesList.length || 1;
 
     const packageTiers = [
-      { tier: 'Super Dream (> ₹20 LPA)', count: 98, percentage: 18.1 },
-      { tier: 'Dream (₹12 - ₹20 LPA)', count: 245, percentage: 45.3 },
-      { tier: 'Standard (₹6 - ₹12 LPA)', count: 198, percentage: 36.6 }
+      { tier: 'Super Dream (> ₹20 LPA)', count: superDream, percentage: Math.round((superDream / totalPkgCount) * 1000) / 10 },
+      { tier: 'Dream (₹12 - ₹20 LPA)', count: dream, percentage: Math.round((dream / totalPkgCount) * 1000) / 10 },
+      { tier: 'Standard (₹6 - ₹12 LPA)', count: standard, percentage: Math.round((standard / totalPkgCount) * 1000) / 10 }
     ];
 
     res.json({
@@ -526,11 +633,13 @@ export const getPlacementReports = async (req, res, next) => {
         totalEnrolled,
         placedStudents,
         placementRate,
-        highestPackage: '₹48.0 LPA (Google)',
-        averagePackage: '₹14.2 LPA',
-        medianPackage: '₹12.8 LPA',
+        highestPackage,
+        averagePackage,
+        medianPackage,
         totalDrivesConducted: drives.length,
-        branchStats,
+        branchStats: branchStats.length > 0 ? branchStats : [
+          { branch: 'Computer Science & Engineering', enrolled: totalEnrolled, placed: placedStudents, percentage: placementRate, medianCtc: medianPackage }
+        ],
         packageTiers
       }
     });

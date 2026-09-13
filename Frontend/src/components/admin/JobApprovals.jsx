@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import confetti from 'canvas-confetti';
 import { 
   Briefcase, 
   CheckCircle2, 
@@ -12,7 +13,10 @@ import {
   GraduationCap, 
   MapPin, 
   Eye, 
-  X 
+  X,
+  Sparkles,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 
 export default function JobApprovals() {
@@ -22,6 +26,52 @@ export default function JobApprovals() {
   const [rejectModalJob, setRejectModalJob] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [viewJobModal, setViewJobModal] = useState(null);
+  const [confirmingJobId, setConfirmingJobId] = useState(null);
+  const [recentlyConfirmedIds, setRecentlyConfirmedIds] = useState(new Set());
+  const [recentlyRejectedIds, setRecentlyRejectedIds] = useState(new Set());
+
+  const handleApprove = async (job) => {
+    const jobId = job.id || job._id;
+    setConfirmingJobId(jobId);
+    await approveJob(jobId);
+
+    try {
+      confetti({
+        particleCount: 35,
+        spread: 55,
+        origin: { y: 0.7 }
+      });
+    } catch {}
+
+    setRecentlyConfirmedIds(prev => new Set(prev).add(jobId));
+    setConfirmingJobId(null);
+
+    setTimeout(() => {
+      setRecentlyConfirmedIds(prev => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
+    }, 3000);
+  };
+
+  const handleConfirmReject = async () => {
+    if (rejectModalJob) {
+      const jobId = rejectModalJob.id || rejectModalJob._id;
+      await rejectJob(jobId, rejectReason);
+      setRecentlyRejectedIds(prev => new Set(prev).add(jobId));
+      setRejectModalJob(null);
+      setRejectReason('');
+
+      setTimeout(() => {
+        setRecentlyRejectedIds(prev => {
+          const next = new Set(prev);
+          next.delete(jobId);
+          return next;
+        });
+      }, 3000);
+    }
+  };
 
   const getJobStatus = (job) => {
     if (job.approved === false && job.rejectionReason) return 'Rejected';
@@ -44,14 +94,6 @@ export default function JobApprovals() {
   const approvedCount = jobs.filter(j => j.approved === true).length;
   const pendingCount = jobs.filter(j => j.approved === undefined || (j.approved === null)).length;
   const rejectedCount = jobs.filter(j => j.approved === false).length;
-
-  const handleConfirmReject = () => {
-    if (rejectModalJob) {
-      rejectJob(rejectModalJob.id, rejectReason);
-      setRejectModalJob(null);
-      setRejectReason('');
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -197,27 +239,72 @@ export default function JobApprovals() {
                 {/* Actions */}
                 <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                   <button
+                    type="button"
                     onClick={() => setViewJobModal(job)}
-                    className="px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors flex items-center gap-1"
+                    className="px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5 text-slate-500" />
                     <span>View JD</span>
                   </button>
 
+                  {/* Dynamic Confirmation Button */}
                   <button
-                    onClick={() => approveJob(job.id)}
-                    className="px-3 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-colors flex items-center gap-1"
+                    type="button"
+                    onClick={() => handleApprove(job)}
+                    disabled={confirmingJobId === (job.id || job._id)}
+                    className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      recentlyConfirmedIds.has(job.id || job._id)
+                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105 border border-emerald-400 font-extrabold animate-pulse'
+                        : status === 'Approved'
+                        ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100/90 border border-emerald-300 font-extrabold shadow-none'
+                        : status === 'Rejected'
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                        : 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-2xs hover:shadow-sm'
+                    }`}
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Approve</span>
+                    {recentlyConfirmedIds.has(job.id || job._id) ? (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+                        <span>Confirmed! 🎉</span>
+                      </>
+                    ) : status === 'Approved' ? (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Confirmed & Live</span>
+                      </>
+                    ) : status === 'Rejected' ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                        <span>Re-Confirm Job</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                        <span>Confirm & Approve</span>
+                      </>
+                    )}
                   </button>
 
+                  {/* Dynamic Rejection Button */}
                   <button
+                    type="button"
                     onClick={() => setRejectModalJob(job)}
-                    className="px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors flex items-center gap-1"
+                    className={`px-3 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      recentlyRejectedIds.has(job.id || job._id)
+                        ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30 scale-105 border border-rose-400 font-extrabold animate-pulse'
+                        : status === 'Rejected'
+                        ? 'bg-rose-50 text-rose-700 hover:bg-rose-100/90 border border-rose-300 font-extrabold shadow-none'
+                        : 'text-rose-600 hover:bg-rose-50 active:scale-95 border border-rose-200'
+                    }`}
                   >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span>Reject</span>
+                    <XCircle className={`w-3.5 h-3.5 ${recentlyRejectedIds.has(job.id || job._id) ? 'text-white' : status === 'Rejected' ? 'text-rose-600' : 'text-rose-500'}`} />
+                    <span>
+                      {recentlyRejectedIds.has(job.id || job._id)
+                        ? 'Rejected! ✗'
+                        : status === 'Rejected'
+                        ? 'Rejected & Flagged'
+                        : 'Reject'}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -258,15 +345,16 @@ export default function JobApprovals() {
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 onClick={() => setRejectModalJob(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmReject}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs"
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 rounded-lg shadow-sm hover:shadow flex items-center gap-1.5 transition-all cursor-pointer"
               >
-                Confirm Rejection
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Confirm Rejection</span>
               </button>
             </div>
           </div>
@@ -285,7 +373,7 @@ export default function JobApprovals() {
                   <p className="text-xs text-slate-500">{viewJobModal.companyName} • {viewJobModal.department || 'Engineering'}</p>
                 </div>
               </div>
-              <button onClick={() => setViewJobModal(null)} className="text-slate-400 hover:text-slate-600 p-1">
+              <button onClick={() => setViewJobModal(null)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -326,20 +414,52 @@ export default function JobApprovals() {
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <div className="text-xs text-slate-400">ID: {viewJobModal.id}</div>
-              <div className="flex gap-2">
+              <div className="text-xs text-slate-400 font-mono">ID: {viewJobModal.id || viewJobModal._id}</div>
+              <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => {
-                    approveJob(viewJobModal.id);
+                    const j = viewJobModal;
                     setViewJobModal(null);
+                    setRejectModalJob(j);
                   }}
-                  className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                  className={`px-3.5 py-2 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+                    getJobStatus(viewJobModal) === 'Rejected'
+                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                      : 'text-rose-600 hover:bg-rose-50 border border-rose-200 active:scale-95'
+                  }`}
                 >
-                  Approve Job
+                  <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>{getJobStatus(viewJobModal) === 'Rejected' ? 'Rejected ✗' : 'Reject Job'}</span>
                 </button>
                 <button
+                  type="button"
+                  onClick={() => {
+                    handleApprove(viewJobModal);
+                    setViewJobModal(null);
+                  }}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+                    getJobStatus(viewJobModal) === 'Approved'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
+                  }`}
+                >
+                  {getJobStatus(viewJobModal) === 'Approved' ? (
+                    <>
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <span>Confirmed & Published ✓</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                      <span>Confirm & Approve Job</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setViewJobModal(null)}
-                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg"
+                  className="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer"
                 >
                   Close
                 </button>

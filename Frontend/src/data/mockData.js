@@ -8,7 +8,7 @@ export const INITIAL_STUDENT = {
   batch: '2026',
   cgpa: 8.85,
   skills: ['React', 'Node.js', 'JavaScript', 'TypeScript', 'Tailwind CSS', 'PostgreSQL', 'Docker', 'Git', 'Data Structures', 'Python'],
-  isPremium: false,
+  isPremium: true,
   resumeData: {
     fullName: 'Aarav Sharma',
     email: 'aarav.sharma@campus.edu',

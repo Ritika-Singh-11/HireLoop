@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   X,
@@ -19,33 +19,41 @@ import confetti from 'canvas-confetti';
 export default function OfferLetterModal({ isOpen, onClose, offer, onAccept, onDecline }) {
   const { currentRole, showToast } = useApp();
   const printRef = useRef(null);
+  const [confirmMode, setConfirmMode] = useState(null); // 'accept' | 'decline' | null
+  const [localStatus, setLocalStatus] = useState(offer?.status || 'issued');
+
+  useEffect(() => {
+    if (offer?.status) setLocalStatus(offer.status);
+  }, [offer?.status]);
 
   if (!isOpen || !offer) return null;
 
   const isStudent = currentRole === 'student';
-  const isAccepted = offer.status === 'accepted';
-  const isDeclined = offer.status === 'declined';
+  const isAccepted = localStatus === 'accepted' || localStatus === 'Offer Accepted' || offer.offerAccepted;
+  const isDeclined = localStatus === 'declined' || localStatus === 'Offer Declined' || offer.offerDeclined;
+  const canTakeAction = Boolean(onAccept || onDecline) && !isAccepted && !isDeclined;
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleAcceptClick = () => {
-    if (onAccept) onAccept(offer.id || offer._id);
-    confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
-    showToast(`Congratulations! You have formally accepted the offer from ${offer.companyName}!`);
+    setLocalStatus('accepted');
+    setConfirmMode(null);
+    if (onAccept) onAccept(offer.id || offer.applicationId || offer._id);
   };
 
   const handleDeclineClick = () => {
-    if (onDecline) onDecline(offer.id || offer._id);
-    showToast(`You have declined the offer from ${offer.companyName}.`, 'info');
+    setLocalStatus('declined');
+    setConfirmMode(null);
+    if (onDecline) onDecline(offer.id || offer.applicationId || offer._id);
   };
 
   // Safe CTC values
-  const totalCtc = offer.ctc?.totalLpa || 18.5;
-  const baseLpa = offer.ctc?.baseLpa || (totalCtc * 0.75).toFixed(2);
-  const bonusLpa = offer.ctc?.variableBonusLpa || (totalCtc * 0.2).toFixed(2);
-  const joiningBonus = offer.ctc?.joiningBonus || (totalCtc * 0.05).toFixed(2);
+  const totalCtc = Number(offer.ctc?.totalLpa) || (typeof offer.ctc === 'number' ? offer.ctc : 18.5);
+  const baseLpa = Number(offer.ctc?.baseLpa) || Number((totalCtc * 0.75).toFixed(2));
+  const bonusLpa = Number(offer.ctc?.variableBonusLpa) || Number((totalCtc * 0.2).toFixed(2));
+  const joiningBonus = Number(offer.ctc?.joiningBonus) || Number((totalCtc * 0.05).toFixed(2));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-xs overflow-y-auto animate-fadeIn">
@@ -300,24 +308,64 @@ export default function OfferLetterModal({ isOpen, onClose, offer, onAccept, onD
           </div>
 
           <div className="flex items-center gap-2">
-            {isStudent && !isAccepted && !isDeclined && (
+            {canTakeAction && (
               <>
-                <button
-                  type="button"
-                  onClick={handleDeclineClick}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
-                >
-                  Decline Offer
-                </button>
+                {confirmMode === 'accept' ? (
+                  <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-300">
+                    <span className="text-xs font-bold text-emerald-900">Digitally sign & accept?</span>
+                    <button
+                      type="button"
+                      onClick={handleAcceptClick}
+                      className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMode(null)}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold cursor-pointer border border-slate-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : confirmMode === 'decline' ? (
+                  <div className="flex items-center gap-2 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-300">
+                    <span className="text-xs font-bold text-rose-900">Are you sure you want to decline?</span>
+                    <button
+                      type="button"
+                      onClick={handleDeclineClick}
+                      className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                    >
+                      Yes, Decline
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMode(null)}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold cursor-pointer border border-slate-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMode('decline')}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-semibold text-xs transition-colors cursor-pointer border border-slate-200"
+                    >
+                      Decline Offer
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={handleAcceptClick}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Sparkles className="w-4 h-4 text-emerald-200" />
-                  <span>Accept & Sign Offer</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMode('accept')}
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-emerald-200" />
+                      <span>Accept & Sign Offer</span>
+                    </button>
+                  </>
+                )}
               </>
             )}
 

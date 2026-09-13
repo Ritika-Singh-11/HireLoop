@@ -1,20 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { X, Briefcase, DollarSign, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function PostJobModal({ isOpen, onClose }) {
-  const { addJob, openPaymentModal } = useApp();
+  const { addJob, openPaymentModal, currentUser } = useApp();
 
   const [formData, setFormData] = useState({
     title: '',
     department: 'Core Engineering',
-    companyName: 'Razorpay',
-    companyLogo: '💳',
+    companyName: currentUser?.companyName || 'Corporate Recruiter',
+    companyLogo: '🏢',
     location: 'Bangalore, Karnataka',
     mode: 'Hybrid',
     salaryMin: 18,
     salaryMax: 24,
     minCgpa: 7.5,
+    maxBacklogs: 0,
     eligibleBranches: ['Computer Science & Engineering', 'Information Technology'],
     eligibleBatch: '2026',
     deadline: '2026-10-15',
@@ -22,6 +23,15 @@ export default function PostJobModal({ isOpen, onClose }) {
     requiredSkills: 'React, Node.js, TypeScript, PostgreSQL, System Design',
     description: ''
   });
+
+  useEffect(() => {
+    if (currentUser?.companyName) {
+      setFormData(prev => ({
+        ...prev,
+        companyName: currentUser.companyName
+      }));
+    }
+  }, [currentUser, isOpen]);
 
   if (!isOpen) return null;
 
@@ -36,23 +46,47 @@ export default function PostJobModal({ isOpen, onClose }) {
     });
   };
 
+  const handleDirectPost = () => {
+    const preparedJob = {
+      ...formData,
+      salaryMin: parseFloat(formData.salaryMin),
+      salaryMax: parseFloat(formData.salaryMax),
+      minCgpa: parseFloat(formData.minCgpa),
+      maxBacklogs: parseInt(formData.maxBacklogs || 0),
+      openings: parseInt(formData.openings || 1),
+      salaryDisplay: `₹${formData.salaryMin} - ₹${formData.salaryMax} LPA`,
+      requiredSkills: formData.requiredSkills.split(',').map(s => s.trim()).filter(Boolean)
+    };
+    addJob(preparedJob);
+    onClose();
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
     const preparedJob = {
       ...formData,
+      salaryMin: parseFloat(formData.salaryMin),
+      salaryMax: parseFloat(formData.salaryMax),
+      minCgpa: parseFloat(formData.minCgpa),
+      maxBacklogs: parseInt(formData.maxBacklogs || 0),
+      openings: parseInt(formData.openings || 1),
       salaryDisplay: `₹${formData.salaryMin} - ₹${formData.salaryMax} LPA`,
       requiredSkills: formData.requiredSkills.split(',').map(s => s.trim()).filter(Boolean)
     };
 
-    // Close this modal and trigger sandbox listing fee checkout
+    // Close this modal and trigger Razorpay corporate entrance / listing fee checkout
     onClose();
     openPaymentModal({
       type: 'job_listing',
-      title: 'Company Job Listing Fee Checkout',
+      title: 'Recruiter Entrance & Job Listing Fee',
       amount: 2500,
-      onSuccess: () => {
-        addJob(preparedJob);
+      onSuccess: (paymentResult) => {
+        addJob({
+          ...preparedJob,
+          isPaid: true,
+          paymentId: paymentResult?.razorpay_payment_id || `pay_${Date.now()}`
+        });
       }
     });
   };
@@ -143,7 +177,7 @@ export default function PostJobModal({ isOpen, onClose }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Min Salary (LPA)</label>
               <input
@@ -165,12 +199,25 @@ export default function PostJobModal({ isOpen, onClose }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Min CGPA Cutoff</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Min CGPA</label>
               <input
                 type="number"
                 step="0.1"
+                min="0"
+                max="10"
                 value={formData.minCgpa}
                 onChange={(e) => setFormData({ ...formData, minCgpa: parseFloat(e.target.value) })}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Max Backlogs</label>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                value={formData.maxBacklogs}
+                onChange={(e) => setFormData({ ...formData, maxBacklogs: parseInt(e.target.value) || 0 })}
                 className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -240,28 +287,35 @@ export default function PostJobModal({ isOpen, onClose }) {
           </div>
 
           {/* Listing fee notice */}
-          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+          <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
-              Standard campus listing fee of <strong>₹2,500</strong> will be processed via Sandbox checkout before publishing.
+              Standard corporate entrance fee of <strong>₹2,500</strong> is processed securely via <strong>Razorpay (UPI, Cards, NetBanking)</strong> before publishing.
             </span>
           </div>
 
           {/* Footer Actions */}
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
+              type="button"
+              onClick={handleDirectPost}
+              className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-all cursor-pointer"
+            >
+              Publish Directly (Demo)
+            </button>
+            <button
               type="submit"
-              className="px-6 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2"
+              className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Proceed to Sandbox Listing Fee (₹2,500)</span>
+              <span>Pay via Razorpay & Publish (₹2,500)</span>
             </button>
           </div>
 

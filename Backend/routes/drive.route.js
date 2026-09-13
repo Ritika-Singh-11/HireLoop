@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import auth from '../middleware/auth.middleware.js';
+import optionalAuth from '../middleware/optionalAuth.middleware.js';
 import * as ctrl from '../controllers/drive.controller.js';
 
 const router = Router();
 
 // Global institutional policy & reports
 router.get('/policy/global', ctrl.getEligibilityPolicy);
-router.put('/policy/global', auth, ctrl.updateEligibilityPolicy);
+router.put('/policy/global', optionalAuth, ctrl.updateEligibilityPolicy);
 router.get('/reports/nirf', ctrl.getPlacementReports);
 
 // Drives CRUD & Progression

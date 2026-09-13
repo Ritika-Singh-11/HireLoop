@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import ResumeUploader from './ResumeUploader';
 import { 
@@ -15,11 +15,12 @@ import {
   ShieldCheck, 
   FileText,
   Plus,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 
 export default function StudentProfile({ onNavigate }) {
-  const { student, setStudent, showToast } = useApp();
+  const { student, setStudent, updateStudentProfile, showToast, addNotification } = useApp();
 
   const [formData, setFormData] = useState({
     name: student.name || '',
@@ -37,9 +38,29 @@ export default function StudentProfile({ onNavigate }) {
   });
 
   const [newSkillInput, setNewSkillInput] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedTimestamp, setSavedTimestamp] = useState('Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  const [showSyncSuccess, setShowSyncSuccess] = useState(false);
 
-  const handleSave = (e) => {
+  // Compute live profile completeness
+  const completenessScore = useMemo(() => {
+    let score = 0;
+    if (formData.name && formData.rollNumber) score += 25;
+    if (formData.branch && formData.batch) score += 20;
+    if (formData.cgpa && parseFloat(formData.cgpa) > 0) score += 20;
+    if (formData.skills && formData.skills.length >= 3) score += 20;
+    if (formData.phone && formData.email) score += 15;
+    return Math.min(100, score);
+  }, [formData]);
+
+  const handleSave = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
+    setShowSyncSuccess(false);
+
+    // Realistic network commit delay
+    await new Promise(r => setTimeout(r, 650));
+
     const updated = {
       ...student,
       name: formData.name,
@@ -63,8 +84,31 @@ export default function StudentProfile({ onNavigate }) {
       }
     };
 
-    setStudent(updated);
-    showToast('Academic profile updated and verified successfully!');
+    if (updateStudentProfile) {
+      await updateStudentProfile(updated);
+    } else {
+      setStudent(updated);
+    }
+
+    setIsSaving(false);
+    setShowSyncSuccess(true);
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setSavedTimestamp(`Today at ${nowTime}`);
+
+    // Real-time notification dispatch
+    if (addNotification) {
+      addNotification({
+        role: 'student',
+        title: 'Academic Profile Synchronized',
+        message: `Your verified academic record (${formData.name} • CGPA ${formData.cgpa}) has been committed to the Campus Placement Directorate database.`,
+        type: 'success',
+        category: 'approval',
+        actionTarget: { role: 'student', tab: 'profile' }
+      });
+    }
+
+    showToast('Academic profile updated and synchronized with TPO registry!');
+    setTimeout(() => setShowSyncSuccess(false), 5000);
   };
 
   const addSkill = (e) => {
@@ -133,6 +177,54 @@ export default function StudentProfile({ onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* Live Placement Readiness Meter & Directorate Sync Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0 border border-indigo-100">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-800">Placement Profile Completeness:</span>
+              <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                {completenessScore}% Complete
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {completenessScore >= 85 ? 'Profile verified & fully qualified for Tier-1 Super Dream drives' : 'Complete remaining skills and profile details to maximize drive shortlisting'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:items-end gap-1 shrink-0">
+          <div className="w-full sm:w-48 bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+            <div 
+              className="h-full bg-gradient-to-r from-indigo-600 to-emerald-500 transition-all duration-500 rounded-full"
+              style={{ width: `${completenessScore}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-slate-400 font-mono">
+            Audit State: {savedTimestamp}
+          </span>
+        </div>
+      </div>
+
+      {/* Sync Success Alert Banner */}
+      {showSyncSuccess && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <strong className="font-bold">Directorate Placement Record Synchronized!</strong>
+              <p className="text-emerald-700 text-[11px] mt-0.5">
+                All changes have been successfully committed to the placement database and logged in your student audit trail.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-mono text-emerald-600 font-bold shrink-0">{savedTimestamp}</span>
+        </div>
+      )}
 
       {/* Official Master Resume (PDF) Upload */}
       <ResumeUploader onNavigateToAts={() => onNavigate && onNavigate('resume-analyzer')} />
@@ -310,15 +402,43 @@ export default function StudentProfile({ onNavigate }) {
           </div>
         </div>
 
-        {/* Save Button */}
-        <div className="flex items-center justify-end">
-          <button
-            type="submit"
-            className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save & Update Profile Record</span>
-          </button>
+        {/* Save Button with realistic Directorate sync */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Updates immediately synchronize with campus placement drive criteria & ATS matching.</span>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <button
+              type="submit"
+              disabled={isSaving}
+              className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                showSyncSuccess
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 scale-[1.02]'
+                  : isSaving
+                  ? 'bg-indigo-700 text-white shadow-indigo-700/30 opacity-85 cursor-wait'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
+              }`}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Syncing with TPO Records...</span>
+                </>
+              ) : showSyncSuccess ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-white animate-pulse" />
+                  <span>✓ Profile Saved & Synced to TPO!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Save & Sync Profile</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
       </form>

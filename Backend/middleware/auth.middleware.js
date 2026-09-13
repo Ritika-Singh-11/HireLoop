@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 
 export default function auth(req, res, next) {
   const header = req.headers.authorization;
-  const token = header && header.startsWith('Bearer ') ? header.split(' ')[1] : null;
+  const token = (header && header.startsWith('Bearer ') ? header.split(' ')[1] : null) || req.query?.token || null;
 
   if (!token) {
     return res.status(401).json({ message: 'No access token provided' });

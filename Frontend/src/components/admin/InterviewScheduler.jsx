@@ -15,11 +15,13 @@ import {
   Sparkles,
   X 
 } from 'lucide-react';
+import LiveInterviewRoomModal from '../common/LiveInterviewRoomModal';
 
 export default function InterviewScheduler() {
   const { applications, scheduleInterview, showToast } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [backendInterviews, setBackendInterviews] = useState([]);
+  const [joiningSlot, setJoiningSlot] = useState(null);
 
   // Form State
   const [selectedAppId, setSelectedAppId] = useState(applications[0]?.id || '');
@@ -75,12 +77,15 @@ export default function InterviewScheduler() {
 
     const candidateApp = applications.find(a => a.id === selectedAppId);
 
+    const cleanLink = (meetLink || '').trim();
+    const safeMeetLink = cleanLink ? (cleanLink.startsWith('http://') || cleanLink.startsWith('https://') ? cleanLink : `https://${cleanLink}`) : 'https://meet.google.com';
+
     const interviewData = {
       round: roundType,
       date,
       time,
       mode,
-      link: mode === 'Virtual' ? meetLink : null,
+      link: mode === 'Virtual' ? safeMeetLink : null,
       venue: mode === 'In-Person' ? venue : null,
       interviewer
     };
@@ -97,7 +102,7 @@ export default function InterviewScheduler() {
         date,
         time,
         mode,
-        link: mode === 'Virtual' ? meetLink : null,
+        link: mode === 'Virtual' ? safeMeetLink : null,
         venue: mode === 'In-Person' ? venue : null,
         interviewer,
         status: 'Scheduled'
@@ -245,15 +250,14 @@ export default function InterviewScheduler() {
                       <Copy className="w-3.5 h-3.5 text-slate-400" />
                       <span>Copy Link</span>
                     </button>
-                    <a
-                      href={slot.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-colors flex items-center gap-1"
+                    <button
+                      type="button"
+                      onClick={() => setJoiningSlot(slot)}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
                     >
+                      <Video className="w-3.5 h-3.5 text-emerald-300" />
                       <span>Join Room</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
@@ -394,6 +398,24 @@ export default function InterviewScheduler() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Live In-App Interview Room Modal */}
+      {joiningSlot && (
+        <LiveInterviewRoomModal
+          isOpen={!!joiningSlot}
+          onClose={() => setJoiningSlot(null)}
+          interviewData={{
+            round: joiningSlot.round,
+            date: joiningSlot.date,
+            time: joiningSlot.time,
+            interviewer: joiningSlot.interviewer,
+            meetLink: joiningSlot.link,
+            notes: `TPO Proctoring Room for candidate ${joiningSlot.candidate} (${joiningSlot.roll})`
+          }}
+          userRole="admin"
+          currentUserName="TPO Placement Director"
+        />
       )}
     </div>
   );

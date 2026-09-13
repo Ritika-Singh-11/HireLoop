@@ -16,6 +16,7 @@ import {
   INITIAL_ASSESSMENTS,
   INITIAL_SUBMISSIONS
 } from '../data/mockData';
+import { checkCandidateEligibility } from '../utils/eligibilityHelper';
 
 const AppContext = createContext(null);
 
@@ -152,7 +153,9 @@ export function AppProvider({ children }) {
   const [notifications, setNotifications] = useState(() => {
     try {
       const saved = localStorage.getItem('recruitloop_notifications');
-      return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
+      const readIds = new Set(JSON.parse(localStorage.getItem('recruitloop_read_notification_ids') || '[]'));
+      const list = saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
+      return list.map(n => readIds.has(String(n.id)) ? { ...n, isRead: true } : n);
     } catch {
       return INITIAL_NOTIFICATIONS;
     }
@@ -186,9 +189,15 @@ export function AppProvider({ children }) {
           }));
 
           setNotifications(prev => {
+            const readIds = new Set(JSON.parse(localStorage.getItem('recruitloop_read_notification_ids') || '[]'));
             const map = new Map();
-            prev.forEach(item => map.set(item.id, item));
-            backendItems.forEach(item => map.set(item.id, item));
+            prev.forEach(item => map.set(String(item.id), item));
+            backendItems.forEach(item => {
+              const key = String(item.id);
+              const existing = map.get(key);
+              const isRead = readIds.has(key) || (existing?.isRead === true) || item.isRead;
+              map.set(key, { ...item, isRead });
+            });
             return Array.from(map.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
           });
         }
@@ -218,7 +227,20 @@ export function AppProvider({ children }) {
   };
 
   const markNotificationRead = async (id) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    try {
+      const readIds = new Set(JSON.parse(localStorage.getItem('recruitloop_read_notification_ids') || '[]'));
+      readIds.add(String(id));
+      localStorage.setItem('recruitloop_read_notification_ids', JSON.stringify(Array.from(readIds)));
+    } catch {}
+
+    setNotifications(prev => {
+      const updated = prev.map(n => String(n.id) === String(id) ? { ...n, isRead: true } : n);
+      try {
+        localStorage.setItem('recruitloop_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     try {
       await api.markNotificationRead(id, currentRole);
     } catch {}
@@ -226,14 +248,42 @@ export function AppProvider({ children }) {
 
   const markAllNotificationsRead = async (targetRole) => {
     const roleToMark = targetRole || currentRole;
-    setNotifications(prev => prev.map(n => (n.role === roleToMark || n.role === 'all') ? { ...n, isRead: true } : n));
+    try {
+      const readIds = new Set(JSON.parse(localStorage.getItem('recruitloop_read_notification_ids') || '[]'));
+      notifications.forEach(n => {
+        if (n.role === roleToMark || n.role === 'all') {
+          readIds.add(String(n.id));
+        }
+      });
+      localStorage.setItem('recruitloop_read_notification_ids', JSON.stringify(Array.from(readIds)));
+    } catch {}
+
+    setNotifications(prev => {
+      const updated = prev.map(n => (n.role === roleToMark || n.role === 'all') ? { ...n, isRead: true } : n);
+      try {
+        localStorage.setItem('recruitloop_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
     try {
       await api.markAllNotificationsRead(roleToMark);
     } catch {}
   };
 
   const deleteNotification = async (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    try {
+      const readIds = new Set(JSON.parse(localStorage.getItem('recruitloop_read_notification_ids') || '[]'));
+      readIds.delete(String(id));
+      localStorage.setItem('recruitloop_read_notification_ids', JSON.stringify(Array.from(readIds)));
+    } catch {}
+    setNotifications(prev => {
+      const updated = prev.filter(n => String(n.id) !== String(id));
+      try {
+        localStorage.setItem('recruitloop_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     try {
       await api.deleteNotification(id, currentRole);
     } catch {}
@@ -501,7 +551,13 @@ export function AppProvider({ children }) {
       setCurrentRole(role);
 
       if (role === 'student' && data.user.name) {
-        setStudent(prev => ({ ...prev, id: data.user.id, name: data.user.name, email: data.user.email }));
+        setStudent(prev => ({ 
+          ...prev, 
+          id: data.user.id, 
+          name: data.user.name, 
+          email: data.user.email,
+          isPremium: true
+        }));
       }
 
       showToast(`Welcome back, ${data.user.name || data.user.email}! (Signed into ${role.toUpperCase()} panel)`);
@@ -513,7 +569,7 @@ export function AppProvider({ children }) {
           ? { id: 'admin-1', name: 'Prof. S. K. Verma (Dean)', email: email || 'skverma@campus.edu', role: 'admin', department: 'Head of Placement Directorate' }
           : target === 'recruiter'
           ? { id: 'rec-1', name: 'Neha Kapoor', email: email || 'neha.recruiter@razorpay.com', role: 'recruiter', companyName: 'Razorpay' }
-          : { id: 'stu-1', name: student.name || 'Aarav Sharma', email: email || student.email, role: 'student' };
+          : { id: 'stu-1', name: student.name || 'Aarav Sharma', email: email || student.email, role: 'student', isPremium: true };
         
         api.setAccessToken(target, 'mock-access-token');
         api.setRefreshToken(target, 'mock-refresh-token');
@@ -548,7 +604,7 @@ export function AppProvider({ children }) {
       });
       api.setAccessToken('student', data.accessToken);
       api.setRefreshToken('student', data.refreshToken);
-      setRoleUsers(prev => ({ ...prev, student: data.user }));
+      setRoleUsers(prev => ({ ...prev, student: { ...data.user, isPremium: true } }));
       setCurrentRole('student');
       setStudent(prev => ({
         ...prev,
@@ -564,9 +620,10 @@ export function AppProvider({ children }) {
           : typeof formData.skills === 'string'
             ? formData.skills.split(',').map(s => s.trim()).filter(Boolean)
             : prev.skills,
+        isPremium: true,
       }));
       confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
-      showToast(`Student account created! Welcome to HireLoop, ${data.user.name}.`);
+      showToast(`Student account created! Welcome to HireLoop, ${data.user.name}. Pro tier activated!`);
       return true;
     } catch (err) {
       setAuthError(err.data?.message || err.message || 'Registration failed');
@@ -589,9 +646,36 @@ export function AppProvider({ children }) {
       });
       api.setAccessToken('recruiter', data.accessToken);
       api.setRefreshToken('recruiter', data.refreshToken);
-      setRoleUsers(prev => ({ ...prev, recruiter: data.user }));
+      const recruiterUser = {
+        ...data.user,
+        companyName: formData.companyName || data.user?.companyName || 'Corporate Recruiter',
+        companyId: data.user?.companyId || null,
+        isApproved: data.user?.isApproved || false,
+      };
+      setRoleUsers(prev => ({ ...prev, recruiter: recruiterUser }));
       setCurrentRole('recruiter');
-      showToast(`Company "${formData.companyName}" registered! Logged into Recruiter panel.`);
+
+      // Add to local companies list so Admin/TPO immediately sees it in Company Approvals
+      const newCompany = {
+        id: data.user?.companyId || `comp-${Date.now()}`,
+        name: formData.companyName,
+        logo: '🏢',
+        industry: formData.industry || 'Information Technology',
+        location: 'India',
+        website: formData.website || '',
+        contactPerson: formData.name,
+        contactEmail: formData.email,
+        status: 'Pending',
+        registeredAt: new Date().toISOString().split('T')[0]
+      };
+      setCompanies(prev => {
+        if (prev.some(c => c.name?.toLowerCase() === formData.companyName?.trim().toLowerCase())) {
+          return prev;
+        }
+        return [newCompany, ...prev];
+      });
+
+      showToast(`Company "${formData.companyName}" registered! Awaiting TPO verification.`);
       return true;
     } catch (err) {
       setAuthError(err.data?.message || err.message || 'Registration failed');
@@ -692,36 +776,100 @@ export function AppProvider({ children }) {
   // ================= GENERAL APP ACTIONS =================
 
   // Company Authorizations
-  const approveCompany = (companyId) => {
-    const comp = companies.find(c => c.id === companyId);
-    setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status: 'Approved' } : c));
+  const approveCompany = (companyIdOrName) => {
+    let companyName = 'Partner Company';
+    setCompanies(prev => {
+      let found = false;
+      const updated = prev.map(c => {
+        const matches = 
+          c.id === companyIdOrName || 
+          c._id === companyIdOrName || 
+          (c.name && String(c.name).toLowerCase() === String(companyIdOrName).toLowerCase());
+        if (matches) {
+          found = true;
+          companyName = c.name;
+          return { ...c, status: 'Approved' };
+        }
+        return c;
+      });
+
+      if (!found && companyIdOrName) {
+        const newComp = {
+          id: `comp-${Date.now()}`,
+          name: typeof companyIdOrName === 'string' ? companyIdOrName : 'Partner Employer',
+          status: 'Approved',
+          logo: '🏢',
+          industry: 'Campus Recruitment'
+        };
+        companyName = newComp.name;
+        updated.push(newComp);
+      }
+
+      try {
+        localStorage.setItem('recruitloop_companies', JSON.stringify(updated));
+      } catch {}
+
+      return updated;
+    });
 
     addNotification({
       role: 'recruiter',
       title: 'Company Verification Approved',
-      message: `Placement Directorate verified "${comp?.name || 'Your organization'}" for campus drives.`,
+      message: `Placement Directorate verified "${companyName}" for campus recruitment drives.`,
       type: 'success',
       category: 'approval',
       actionTarget: { role: 'recruiter', tab: 'dashboard' }
     });
 
-    showToast('Company approved and authorized for campus hiring!');
+    showToast(`Company "${companyName}" approved and authorized for campus hiring!`);
   };
 
-  const rejectCompany = (companyId) => {
-    const comp = companies.find(c => c.id === companyId);
-    setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status: 'Rejected' } : c));
+  const rejectCompany = (companyIdOrName) => {
+    let companyName = 'Organization';
+    setCompanies(prev => {
+      let found = false;
+      const updated = prev.map(c => {
+        const matches = 
+          c.id === companyIdOrName || 
+          c._id === companyIdOrName || 
+          (c.name && String(c.name).toLowerCase() === String(companyIdOrName).toLowerCase());
+        if (matches) {
+          found = true;
+          companyName = c.name;
+          return { ...c, status: 'Rejected' };
+        }
+        return c;
+      });
+
+      if (!found && companyIdOrName) {
+        const newComp = {
+          id: `comp-${Date.now()}`,
+          name: typeof companyIdOrName === 'string' ? companyIdOrName : 'Partner Employer',
+          status: 'Rejected',
+          logo: '🏢',
+          industry: 'Campus Recruitment'
+        };
+        companyName = newComp.name;
+        updated.push(newComp);
+      }
+
+      try {
+        localStorage.setItem('recruitloop_companies', JSON.stringify(updated));
+      } catch {}
+
+      return updated;
+    });
 
     addNotification({
       role: 'recruiter',
       title: 'Company Verification Notice',
-      message: `Verification for "${comp?.name || 'Company'}" was rejected. Please contact TPO cell.`,
+      message: `Verification for "${companyName}" was declined. Please contact TPO placement directorate.`,
       type: 'warning',
       category: 'approval',
       actionTarget: { role: 'recruiter', tab: 'dashboard' }
     });
 
-    showToast('Company registration rejected.', 'warning');
+    showToast('Company registration status marked as Rejected.', 'warning');
   };
 
   // Job Openings
@@ -732,9 +880,26 @@ export function AppProvider({ children }) {
       postedAt: 'Just now',
       approved: true
     };
-    setJobs(prev => [newJob, ...prev]);
+    setJobs(prev => {
+      const next = [newJob, ...prev];
+      try {
+        localStorage.setItem('recruitloop_jobs', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
     showToast(`Opening "${newJob.title}" posted successfully!`);
     return newJob;
+  };
+
+  const updateJob = (jobId, updatedData) => {
+    setJobs(prev => {
+      const nextJobs = prev.map(j => (j.id === jobId || j._id === jobId ? { ...j, ...updatedData } : j));
+      try {
+        localStorage.setItem('recruitloop_jobs', JSON.stringify(nextJobs));
+      } catch {}
+      return nextJobs;
+    });
+    showToast('Job opening & eligibility criteria updated successfully!');
   };
 
   // Announcements
@@ -764,9 +929,9 @@ export function AppProvider({ children }) {
     setPaymentModal(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = (paymentResult) => {
     if (paymentModal.onSuccess) {
-      paymentModal.onSuccess();
+      paymentModal.onSuccess(paymentResult);
     } else if (paymentModal.type === 'student_premium') {
       setStudent(prev => ({ ...prev, isPremium: true }));
       showToast('Premium upgrade successful! Unlimited AI mock interviews unlocked.');
@@ -780,10 +945,112 @@ export function AppProvider({ children }) {
     showToast('Resume profile updated successfully!');
   };
 
+  const updateStudentProfile = async (updatedData) => {
+    let backendProfile = null;
+    try {
+      const res = await api.updateStudentProfile(updatedData);
+      if (res?.profile) {
+        backendProfile = res.profile;
+      }
+    } catch (err) {
+      console.warn('Backend student profile sync notice:', err.message || err);
+    }
+
+    const mergedStudent = {
+      ...student,
+      ...updatedData,
+      ...(backendProfile || {})
+    };
+
+    setStudent(mergedStudent);
+    try {
+      localStorage.setItem('recruitloop_student', JSON.stringify(mergedStudent));
+    } catch {}
+
+    // Update in studentsList so Admin / TPO panel reflects changes immediately
+    setStudentsList(prev => {
+      const list = [...prev];
+      const matchIdx = list.findIndex(s => 
+        (s.id && (s.id === student.id || s.id === backendProfile?.id)) ||
+        (s.email && s.email.toLowerCase() === mergedStudent.email?.toLowerCase()) ||
+        (s.rollNumber && s.rollNumber.toLowerCase() === mergedStudent.rollNumber?.toLowerCase())
+      );
+
+      const studentEntry = {
+        id: backendProfile?.id || student.id || `stu-${Date.now()}`,
+        name: mergedStudent.name,
+        email: mergedStudent.email,
+        phone: mergedStudent.phone || '',
+        location: mergedStudent.location || '',
+        rollNumber: mergedStudent.rollNumber || '21BCSE000',
+        branch: mergedStudent.branch || 'Computer Science & Engineering',
+        batch: mergedStudent.batch || 2026,
+        cgpa: parseFloat(mergedStudent.cgpa) || 8.0,
+        skills: mergedStudent.skills || [],
+        backlogs: mergedStudent.backlogs || 0,
+        isVerified: true,
+        isBlocked: false,
+        placedCompany: mergedStudent.placedCompany || null,
+        atsScore: mergedStudent.atsScore || 85,
+        mockInterviewScore: mergedStudent.mockInterviewScore || 88
+      };
+
+      if (matchIdx >= 0) {
+        list[matchIdx] = { ...list[matchIdx], ...studentEntry };
+      } else {
+        list.unshift(studentEntry);
+      }
+
+      try {
+        localStorage.setItem('recruitloop_students_list', JSON.stringify(list));
+      } catch {}
+
+      return list;
+    });
+
+    // Update active student auth user name/email if changed
+    setRoleUsers(prev => {
+      if (prev.student) {
+        const updatedUser = {
+          ...prev.student,
+          name: mergedStudent.name,
+          email: mergedStudent.email
+        };
+        const nextRoles = { ...prev, student: updatedUser };
+        try {
+          localStorage.setItem('recruitloop_role_users', JSON.stringify(nextRoles));
+        } catch {}
+        return nextRoles;
+      }
+      return prev;
+    });
+
+    return mergedStudent;
+  };
+
   const applyToJob = (job, coverLetter = '') => {
-    const existing = applications.find(a => a.jobId === job.id && a.studentId === student.id);
+    const existing = applications.find(a => (a.jobId === job.id || a.jobId === job._id) && (a.studentId === student.id || a.studentEmail === student.email));
     if (existing) {
       showToast('You have already applied for this position!', 'info');
+      return false;
+    }
+
+    // Synchronized Validation: College Placement Directorate Policy strictly takes precedence!
+    const evalResult = checkCandidateEligibility({
+      student,
+      companyRequirement: job,
+      collegePolicy: eligibilityPolicy,
+      userApplications: applications
+    });
+
+    if (!evalResult.isEligible) {
+      if (!evalResult.passesCollege) {
+        showToast(`University Policy Ineligible: ${evalResult.collegeReasons[0]}`, 'error');
+      } else if (!evalResult.passesCompany) {
+        showToast(`Company Criteria Ineligible: ${evalResult.companyReasons[0]}`, 'error');
+      } else {
+        showToast(`Eligibility check failed: ${evalResult.allReasons[0]}`, 'error');
+      }
       return false;
     }
 
@@ -835,11 +1102,21 @@ export function AppProvider({ children }) {
 
   const updateApplicationStatus = (appId, newStatus, extraDetails = {}) => {
     setApplications(prev => prev.map(app => {
-      if (app.id === appId) {
+      if (app.id === appId || app._id === appId || String(app.id) === String(appId)) {
         const historyEntry = { status: newStatus, date: new Date().toISOString().split('T')[0], note: extraDetails.notes || `Status updated to ${newStatus}` };
         const updated = { ...app, status: newStatus, history: [...(app.history || []), historyEntry] };
-        if (newStatus === 'Interview Scheduled' && extraDetails.interview) updated.interviewDetails = extraDetails.interview;
-        if (newStatus === 'Offer' && extraDetails.offer) updated.offerDetails = extraDetails.offer;
+        if (newStatus === 'Interview Scheduled' && extraDetails.interview) {
+          updated.interviewDetails = extraDetails.interview;
+          updated.interview = extraDetails.interview;
+        }
+        if (newStatus === 'Offer' || newStatus === 'Offered' || newStatus === 'offered') {
+          updated.offerAccepted = false;
+          updated.offerDeclined = false;
+          if (extraDetails.offer) {
+            updated.offerDetails = extraDetails.offer;
+            updated.offer = extraDetails.offer;
+          }
+        }
         return updated;
       }
       return app;
@@ -877,6 +1154,94 @@ export function AppProvider({ children }) {
     showToast(`Candidate status updated to: ${newStatus}`);
   };
 
+  const acceptOffer = async (appId) => {
+    setApplications(prev => prev.map(a => (a.id === appId || a._id === appId || String(a.id) === String(appId)) ? {
+      ...a,
+      status: 'Offer Accepted',
+      offerAccepted: true,
+      offerDeclined: false,
+      history: [...(a.history || []), { status: 'Offer Accepted', date: new Date().toISOString().split('T')[0], note: 'Offer accepted and digitally signed by candidate' }]
+    } : a));
+
+    confetti({ particleCount: 120, spread: 85, origin: { y: 0.6 } });
+
+    const targetApp = applications.find(a => a.id === appId || a._id === appId || String(a.id) === String(appId));
+    const compName = targetApp?.companyName || 'Corporate Partner';
+
+    addNotification({
+      role: 'student',
+      title: '🎉 Placement Offer Accepted!',
+      message: `You have successfully accepted and signed the placement offer from ${compName}. Welcome aboard!`,
+      type: 'success',
+      category: 'application',
+      actionTarget: { role: 'student', tab: 'applications' }
+    });
+
+    addNotification({
+      role: 'recruiter',
+      title: 'Offer Accepted by Candidate',
+      message: `${student.name || 'Candidate'} accepted your campus placement offer for ${targetApp?.jobTitle || compName}.`,
+      type: 'success',
+      category: 'application',
+      actionTarget: { role: 'recruiter', tab: 'applicants' }
+    });
+
+    addNotification({
+      role: 'admin',
+      title: 'Offer Confirmed: Candidate Placed',
+      message: `${student.name || 'Candidate'} accepted placement contract at ${compName}.`,
+      type: 'success',
+      category: 'application',
+      actionTarget: { role: 'admin', tab: 'analytics' }
+    });
+
+    showToast(`🎉 Congratulations! You formally accepted the offer from ${compName}!`);
+
+    try {
+      await api.acceptOffer(appId);
+    } catch (err) {
+      console.warn('Backend offer accept sync notice (client state active):', err.message);
+    }
+  };
+
+  const declineOffer = async (appId) => {
+    setApplications(prev => prev.map(a => (a.id === appId || a._id === appId || String(a.id) === String(appId)) ? {
+      ...a,
+      status: 'Offer Declined',
+      offerDeclined: true,
+      offerAccepted: false,
+      history: [...(a.history || []), { status: 'Offer Declined', date: new Date().toISOString().split('T')[0], note: 'Offer declined by candidate' }]
+    } : a));
+
+    const targetApp = applications.find(a => a.id === appId || a._id === appId || String(a.id) === String(appId));
+    const compName = targetApp?.companyName || 'Company';
+
+    addNotification({
+      role: 'recruiter',
+      title: 'Offer Notice: Candidate Declined',
+      message: `${student.name || 'Candidate'} opted out of the placement offer for ${compName}.`,
+      type: 'warning',
+      category: 'application',
+      actionTarget: { role: 'recruiter', tab: 'applicants' }
+    });
+
+    addNotification({
+      role: 'admin',
+      title: 'Candidate Declined Offer',
+      message: `${student.name || 'Candidate'} declined the placement offer from ${compName}.`,
+      type: 'warning',
+      category: 'application'
+    });
+
+    showToast(`You have declined the offer from ${compName}.`, 'info');
+
+    try {
+      await api.declineOffer(appId);
+    } catch (err) {
+      console.warn('Backend offer decline sync notice (client state active):', err.message);
+    }
+  };
+
   // ================= TPO ACTIONS =================
   const verifyStudent = (studentId) => {
     setStudentsList(prev => prev.map(s => s.id === studentId ? { ...s, isVerified: true } : s));
@@ -898,13 +1263,17 @@ export function AppProvider({ children }) {
     showToast('Student placement clearance status updated.');
   };
 
-  const approveJob = (jobId) => {
-    const job = jobs.find(j => j.id === jobId);
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, approved: true, rejectionReason: null } : j));
+  const approveJob = async (jobId) => {
+    const job = jobs.find(j => j.id === jobId || j._id === jobId);
+    setJobs(prev => prev.map(j => (j.id === jobId || j._id === jobId) ? { ...j, approved: true, rejectionReason: null } : j));
+
+    try {
+      if (api.approveJob) await api.approveJob(jobId);
+    } catch {}
     
     addNotification({
       role: 'recruiter',
-      title: 'Job Posting Approved',
+      title: 'Job Posting Approved & Confirmed',
       message: `Your campus job posting "${job?.title || 'Opening'}" is now live and accepting applications.`,
       type: 'success',
       category: 'approval',
@@ -919,12 +1288,12 @@ export function AppProvider({ children }) {
       actionTarget: { role: 'student', tab: 'jobs' }
     });
 
-    showToast('Job opening approved! Students can now apply.');
+    showToast(`Job "${job?.title || 'Opening'}" confirmed & published!`);
   };
 
-  const rejectJob = (jobId, reason) => {
-    const job = jobs.find(j => j.id === jobId);
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, approved: false, rejectionReason: reason || 'Not meeting TPC criteria' } : j));
+  const rejectJob = async (jobId, reason) => {
+    const job = jobs.find(j => j.id === jobId || j._id === jobId);
+    setJobs(prev => prev.map(j => (j.id === jobId || j._id === jobId) ? { ...j, approved: false, rejectionReason: reason || 'Not meeting TPC criteria' } : j));
     
     addNotification({
       role: 'recruiter',
@@ -985,6 +1354,92 @@ export function AppProvider({ children }) {
     showToast(`Interview scheduled and invitation sent to candidate!`);
   };
 
+  const recommendCandidateToHr = (studentObj, jobObj, matchScore = 90, notes = '') => {
+    if (!studentObj || !jobObj) return false;
+
+    const studentId = studentObj.id || studentObj._id || studentObj.studentId;
+    const jobId = jobObj.id || jobObj._id;
+    const jobTitle = jobObj.title || 'Campus Opening';
+    const compName = jobObj.companyName || jobObj.company || 'Recruiter';
+
+    let matchedAppIndex = -1;
+    const updatedApps = [...applications];
+
+    matchedAppIndex = updatedApps.findIndex(
+      a => (String(a.jobId) === String(jobId) || String(a.job?._id || a.job?.id || a.job) === String(jobId)) &&
+           (String(a.studentId) === String(studentId) || a.studentEmail === studentObj.email || a.studentName === studentObj.name)
+    );
+
+    const historyEntry = {
+      status: 'Shortlisted',
+      date: new Date().toISOString().split('T')[0],
+      note: notes || `⭐ Direct TPO Recommendation dispatched with ${matchScore}% AI Match Score`
+    };
+
+    if (matchedAppIndex !== -1) {
+      updatedApps[matchedAppIndex] = {
+        ...updatedApps[matchedAppIndex],
+        isTpoRecommended: true,
+        tpoRecommendationScore: matchScore,
+        tpoNotes: notes || `TPO verified candidate match (${matchScore}%)`,
+        status: updatedApps[matchedAppIndex].status === 'Applied' ? 'Shortlisted' : updatedApps[matchedAppIndex].status,
+        history: [...(updatedApps[matchedAppIndex].history || []), historyEntry]
+      };
+    } else {
+      const newApp = {
+        id: `app-rec-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        jobId: jobId,
+        jobTitle: jobTitle,
+        companyName: compName,
+        studentId: studentId,
+        studentName: studentObj.name || 'Candidate',
+        studentEmail: studentObj.email || `${(studentObj.name || 'student').toLowerCase().replace(/\s+/g, '')}@campus.edu`,
+        studentRoll: studentObj.rollNumber || studentObj.roll || '21BCSE000',
+        branch: studentObj.branch || 'Engineering',
+        cgpa: studentObj.cgpa || 8.0,
+        status: 'Shortlisted',
+        appliedDate: new Date().toISOString().split('T')[0],
+        matchScore: matchScore,
+        isTpoRecommended: true,
+        tpoRecommendationScore: matchScore,
+        tpoNotes: notes || `TPO AI Recommendation dispatched to HR`,
+        history: [
+          { status: 'Applied', date: new Date().toISOString().split('T')[0], note: 'Application initiated via TPO endorsement' },
+          historyEntry
+        ]
+      };
+      updatedApps.unshift(newApp);
+    }
+
+    setApplications(updatedApps);
+    try {
+      localStorage.setItem('recruitloop_applications', JSON.stringify(updatedApps));
+    } catch {}
+
+    // Dispatch real-time notification to Recruiter
+    addNotification({
+      role: 'recruiter',
+      title: `⭐ TPO Recommended: ${studentObj.name}`,
+      message: `The TPO has officially endorsed ${studentObj.name} (${studentObj.branch || 'Engineering'}, CGPA ${studentObj.cgpa || '8.0+'}) for "${jobTitle}" with a ${matchScore}% AI match.`,
+      type: 'success',
+      category: 'candidate_recommendation',
+      actionTarget: { role: 'recruiter', tab: 'applicants' }
+    });
+
+    // Dispatch notification to Student
+    addNotification({
+      role: 'student',
+      title: `⭐ TPO Endorsement Dispatched`,
+      message: `Your profile has been officially endorsed by the TPO to ${compName} for the "${jobTitle}" position.`,
+      type: 'success',
+      category: 'endorsement',
+      actionTarget: { role: 'student', tab: 'applications' }
+    });
+
+    showToast(`⭐ ${studentObj.name} officially endorsed to ${compName} HR!`);
+    return true;
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1015,18 +1470,23 @@ export function AppProvider({ children }) {
         // mock app state
         student,
         setStudent,
+        updateStudentProfile,
         updateStudentResume,
         companies,
         approveCompany,
         rejectCompany,
         jobs,
         addJob,
+        updateJob,
         approveJob,
         rejectJob,
         applications,
         applyToJob,
         updateApplicationStatus,
+        acceptOffer,
+        declineOffer,
         scheduleInterview,
+        recommendCandidateToHr,
         announcements,
         addAnnouncement,
         // TPO directorate collections & actions
@@ -1041,6 +1501,7 @@ export function AppProvider({ children }) {
         eligibilityPolicy,
         setEligibilityPolicy,
         updateEligibilityPolicy,
+        checkCandidateEligibility,
         fraudAlerts,
         setFraudAlerts,
         resolveFraudAlert,

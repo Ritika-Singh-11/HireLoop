@@ -87,9 +87,11 @@ export function clearAllTokens() {
 
 function authHeaders(role) {
   const token = getAccessToken(role || activeRole);
+  const geminiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('recruitloop_gemini_api_key') : null;
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(geminiKey ? { 'x-gemini-api-key': geminiKey } : {}),
   };
 }
 
@@ -195,6 +197,14 @@ export const api = {
     window.location.href = `${API_BASE}/auth/github`;
   },
 
+  // ---------- Student Profile ----------
+  async getStudentProfile() {
+    return request('/students/profile', { role: 'student' });
+  },
+  async updateStudentProfile(profileData) {
+    return request('/students/profile', { method: 'PUT', body: JSON.stringify(profileData), role: 'student' });
+  },
+
   // ---------- Jobs ----------
   async getJobs(filters = {}) {
     const qs = new URLSearchParams(filters).toString();
@@ -229,6 +239,20 @@ export const api = {
   },
   async updateApplicationStatus(appId, status, recruiterNotes) {
     return request(`/applications/${appId}/status`, { method: 'PATCH', body: JSON.stringify({ status, recruiterNotes }) });
+  },
+
+  // ---------- Campus Placement Offers ----------
+  async issueOffer(payload) {
+    return request('/offers', { method: 'POST', body: JSON.stringify(payload), role: 'recruiter' });
+  },
+  async acceptOffer(offerId) {
+    return request(`/offers/${offerId}/accept`, { method: 'PATCH', role: 'student' });
+  },
+  async declineOffer(offerId, reason) {
+    return request(`/offers/${offerId}/decline`, { method: 'PATCH', body: JSON.stringify({ reason }), role: 'student' });
+  },
+  async getMyOffers() {
+    return request('/offers/my-offers', { role: 'student' });
   },
 
   // ---------- Admin & TPC Directorate ----------
@@ -297,7 +321,7 @@ export const api = {
 
   // ---------- Official Offer Letters ----------
   async issueOffer(offerData) {
-    return request('/offers', { method: 'POST', body: JSON.stringify(offerData) });
+    return request('/offers', { method: 'POST', body: JSON.stringify(offerData), role: 'recruiter' });
   },
   async getMyOffers() {
     return request('/offers/my-offers', { role: 'student' });
@@ -376,6 +400,29 @@ export const api = {
   },
   async getNirfReports() {
     return request('/drives/reports/nirf');
+  },
+
+  // ---------- Razorpay Corporate Gateway ----------
+  async getRazorpayKey() {
+    return request('/payment/key');
+  },
+  async updateRazorpayConfig(payload) {
+    return request('/payment/config', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  async createPaymentOrder(payload) {
+    return request('/payment/create-order', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+  async verifyPayment(payload) {
+    return request('/payment/verify', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 };
 

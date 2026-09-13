@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { X, Calendar, Clock, Video, User, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function ScheduleInterviewModal({ application, isOpen, onClose, onSchedule }) {
-  if (!isOpen || !application) return null;
-
   const [round, setRound] = useState('Technical Round 1 (Data Structures & Systems)');
   const [date, setDate] = useState('2026-09-14');
   const [time, setTime] = useState('02:00 PM IST');
@@ -11,15 +9,20 @@ export default function ScheduleInterviewModal({ application, isOpen, onClose, o
   const [meetLink, setMeetLink] = useState('https://meet.google.com/xyz-rzp-interview');
   const [notes, setNotes] = useState('Please keep your camera on and prepare a live coding IDE (VS Code / Replit).');
 
+  if (!isOpen || !application) return null;
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    const cleanLink = (meetLink || '').trim();
+    const safeLink = cleanLink ? (cleanLink.startsWith('http://') || cleanLink.startsWith('https://') ? cleanLink : `https://${cleanLink}`) : 'https://meet.google.com';
+
     onSchedule(application.id, {
       interview: {
         round,
         date,
         time,
         interviewer,
-        meetLink,
+        meetLink: safeLink,
         notes
       },
       notes: `Interview slot confirmed for ${date} at ${time} with ${interviewer}. Confirmation email dispatched.`

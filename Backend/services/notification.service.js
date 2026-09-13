@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Notification from '../models/notification.model.js';
 
 export const notificationService = {
@@ -41,7 +42,7 @@ export const notificationService = {
 
     const query = {
       $or: [
-        { recipient: userId },
+        ...(userId ? [{ recipient: userId }] : []),
         { role: role },
         { role: 'all' },
       ],
@@ -69,16 +70,23 @@ export const notificationService = {
    * Mark a single notification as read
    */
   async markAsRead(notificationId, userId, role) {
-    const notification = await Notification.findOne({
-      _id: notificationId,
-      $or: [
+    if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+      return { _id: notificationId, isRead: true, readAt: new Date() };
+    }
+
+    const query = { _id: notificationId };
+    if (userId) {
+      query.$or = [
         { recipient: userId },
         { role: role },
         { role: 'all' },
-      ],
-    });
+      ];
+    }
 
-    if (!notification) return null;
+    const notification = await Notification.findOne(query);
+    if (!notification) {
+      return { _id: notificationId, isRead: true, readAt: new Date() };
+    }
 
     notification.isRead = true;
     notification.readAt = new Date();
@@ -90,22 +98,26 @@ export const notificationService = {
    * Mark all notifications as read for this user and role
    */
   async markAllAsRead(userId, role) {
-    const result = await Notification.updateMany(
-      {
-        $or: [
-          { recipient: userId },
-          { role: role },
-          { role: 'all' },
-        ],
-        isRead: false,
+    const query = { isRead: false };
+    if (userId) {
+      query.$or = [
+        { recipient: userId },
+        { role: role },
+        { role: 'all' },
+      ];
+    } else if (role) {
+      query.$or = [
+        { role: role },
+        { role: 'all' },
+      ];
+    }
+
+    const result = await Notification.updateMany(query, {
+      $set: {
+        isRead: true,
+        readAt: new Date(),
       },
-      {
-        $set: {
-          isRead: true,
-          readAt: new Date(),
-        },
-      }
-    );
+    });
     return result;
   },
 
@@ -113,15 +125,19 @@ export const notificationService = {
    * Delete a single notification
    */
   async deleteNotification(notificationId, userId, role) {
-    const result = await Notification.findOneAndDelete({
-      _id: notificationId,
-      $or: [
+    if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+      return { _id: notificationId, deleted: true };
+    }
+
+    const query = { _id: notificationId };
+    if (userId) {
+      query.$or = [
         { recipient: userId },
         { role: role },
         { role: 'all' },
-      ],
-    });
-    return result;
+      ];
+    }
+    return await Notification.findOneAndDelete(query);
   },
 
   /**

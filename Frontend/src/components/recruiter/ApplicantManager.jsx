@@ -20,10 +20,12 @@ import {
   Loader2,
   ShieldCheck,
   Award,
-  Code2
+  Code2,
+  Video
 } from 'lucide-react';
 import ScheduleInterviewModal from './ScheduleInterviewModal';
 import OfferLetterModal from '../common/OfferLetterModal';
+import LiveInterviewRoomModal from '../common/LiveInterviewRoomModal';
 import { api } from '../../services/api';
 
 export default function ApplicantManager() {
@@ -41,6 +43,7 @@ export default function ApplicantManager() {
   const [issuingOfferApp, setIssuingOfferApp] = useState(null);
   const [previewOffer, setPreviewOffer] = useState(null);
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
+  const [joiningInterview, setJoiningInterview] = useState(null);
 
   // Offer Letter Generation Form
   const [offerForm, setOfferForm] = useState({
@@ -58,14 +61,23 @@ export default function ApplicantManager() {
 
   const filteredApplicants = useMemo(() => {
     return applications.filter(app => {
-      if (selectedJobId !== 'All' && app.jobId !== selectedJobId) return false;
-      if (statusFilter !== 'All' && app.status !== statusFilter) return false;
-      if (branchFilter !== 'All' && !app.studentBranch.toLowerCase().includes(branchFilter.toLowerCase())) return false;
-      if (parseFloat(app.studentCgpa) < parseFloat(minCgpaFilter)) return false;
+      if (selectedJobId !== 'All' && String(app.jobId) !== String(selectedJobId)) return false;
+      if (statusFilter !== 'All') {
+        if (statusFilter === 'TPO Recommended') {
+          if (!app.isTpoRecommended) return false;
+        } else if (app.status !== statusFilter) {
+          return false;
+        }
+      }
+      const branchStr = (app.studentBranch || app.branch || '').toLowerCase();
+      if (branchFilter !== 'All' && !branchStr.includes(branchFilter.toLowerCase())) return false;
+      const cgpaNum = parseFloat(app.studentCgpa || app.cgpa || 0);
+      if (cgpaNum < parseFloat(minCgpaFilter)) return false;
       if (skillSearch.trim()) {
         const query = skillSearch.toLowerCase();
-        const hasSkill = (app.studentSkills || []).some(s => s.toLowerCase().includes(query));
-        const hasName = app.studentName.toLowerCase().includes(query);
+        const skillsList = app.studentSkills || app.skills || [];
+        const hasSkill = skillsList.some(s => s.toLowerCase().includes(query));
+        const hasName = (app.studentName || '').toLowerCase().includes(query);
         if (!hasSkill && !hasName) return false;
       }
       return true;
@@ -74,7 +86,7 @@ export default function ApplicantManager() {
 
   const openIssueOfferModal = (app) => {
     const matchedJob = jobs.find(j => j.id === app.jobId);
-    const ctcStr = matchedJob?.salary || '20 LPA';
+    const ctcStr = String(matchedJob?.salary || '20 LPA');
     const parsedNum = parseFloat(ctcStr.replace(/[^0-9.]/g, '')) || 20.0;
     const base = (parsedNum * 0.75).toFixed(1);
     const bonus = (parsedNum * 0.18).toFixed(1);
@@ -134,6 +146,11 @@ export default function ApplicantManager() {
       await api.issueOffer({
         applicationId: app.id,
         designation: offerForm.designation,
+        companyName: app.companyName,
+        companyLogo: app.companyLogo,
+        studentName: app.studentName,
+        studentRoll: app.studentRoll,
+        studentBranch: app.studentBranch,
         ctc: {
           totalLpa: parseFloat(offerForm.totalLpa),
           baseLpa: parseFloat(offerForm.baseLpa),
@@ -194,7 +211,8 @@ export default function ApplicantManager() {
 
   const handlePreviewOffer = (app) => {
     const details = app.offerDetails || app.offer || {};
-    const pkgNum = parseFloat(details.package ? details.package.replace(/[^0-9.]/g, '') : (details.totalLpa || 20.0)) || 20.0;
+    const pkgStr = String(details.package || details.totalLpa || 20.0);
+    const pkgNum = parseFloat(pkgStr.replace(/[^0-9.]/g, '')) || 20.0;
     const offerObj = {
       id: app.id,
       offerCode: details.offerCode || `TPC-OFFER-2026-${(app.id || '2026').toString().slice(-4).toUpperCase()}`,
@@ -309,6 +327,7 @@ export default function ApplicantManager() {
               className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 bg-white"
             >
               <option value="All">All Pipeline Stages</option>
+              <option value="TPO Recommended">⭐ TPO Recommended</option>
               <option value="Applied">Applied</option>
               <option value="Shortlisted">Shortlisted</option>
               <option value="Interview Scheduled">Interview Scheduled</option>
@@ -331,6 +350,10 @@ export default function ApplicantManager() {
             const isOffer = app.status === 'Offer';
             const isInterview = app.status === 'Interview Scheduled';
             const isShortlisted = app.status === 'Shortlisted';
+            const studentName = app.studentName || 'Candidate';
+            const studentBranch = app.studentBranch || app.branch || 'Engineering';
+            const studentRoll = app.studentRoll || app.rollNumber || app.roll || '21BCSE000';
+            const studentCgpa = app.studentCgpa || app.cgpa || '8.0';
 
             return (
               <div key={app.id} className="p-5 hover:bg-slate-50/70 transition-colors">
@@ -339,20 +362,30 @@ export default function ApplicantManager() {
                   {/* Candidate Bio */}
                   <div className="flex items-start gap-3.5">
                     <div className="w-11 h-11 rounded-xl bg-slate-800 text-white font-bold flex items-center justify-center text-sm shrink-0 shadow-xs">
-                      {app.studentName.split(' ').map(n => n[0]).join('')}
+                      {studentName.split(' ').map(n => n[0]).join('')}
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-bold text-slate-900 text-sm">{app.studentName}</h4>
+                        <h4 className="font-bold text-slate-900 text-sm">{studentName}</h4>
+                        {app.isTpoRecommended && (
+                          <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                            <span>⭐ TPO Recommended</span>
+                            {app.tpoRecommendationScore && (
+                              <span className="text-[10px] bg-amber-200 text-amber-950 px-1.5 py-0.2 rounded-full font-bold">
+                                {app.tpoRecommendationScore}%
+                              </span>
+                            )}
+                          </span>
+                        )}
                         <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
-                          {app.studentRoll}
+                          {studentRoll}
                         </span>
                         <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          CGPA: {app.studentCgpa}
+                          CGPA: {studentCgpa}
                         </span>
                         <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
                           <Sparkles className="w-3 h-3" />
-                          <span>ATS {app.matchScore}%</span>
+                          <span>ATS {app.matchScore || 85}%</span>
                         </span>
                         {app.assessmentScore !== undefined ? (
                           <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
@@ -378,12 +411,20 @@ export default function ApplicantManager() {
                       </div>
 
                       <div className="text-xs text-slate-500 mt-1">
-                        <span>{app.studentBranch}</span> • <span className="text-slate-700 font-semibold">{app.jobTitle}</span> ({app.companyName})
+                        <span>{studentBranch}</span> • <span className="text-slate-700 font-semibold">{app.jobTitle}</span> ({app.companyName})
                       </div>
+
+                      {app.tpoNotes && (
+                        <div className="mt-1">
+                          <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                            <span>🎓 TPO Note:</span> {app.tpoNotes}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Skills */}
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {(app.studentSkills || []).slice(0, 6).map((sk, idx) => (
+                        {(app.studentSkills || app.skills || []).slice(0, 6).map((sk, idx) => (
                           <span key={idx} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
                             {sk}
                           </span>
@@ -466,21 +507,24 @@ export default function ApplicantManager() {
                 </div>
 
                 {/* Cover letter or interview notice if present */}
-                {app.interviewDetails && (
-                  <div className="mt-3 p-3 bg-purple-50/70 rounded-xl border border-purple-100 text-xs text-purple-900 flex items-center justify-between">
-                    <span>
-                      <strong>Slot Scheduled:</strong> {app.interviewDetails.round} on {app.interviewDetails.date} at {app.interviewDetails.time} ({app.interviewDetails.interviewer})
-                    </span>
-                    <a
-                      href={app.interviewDetails.meetLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-bold text-purple-700 underline"
-                    >
-                      Open Meet Link
-                    </a>
-                  </div>
-                )}
+                {(app.interviewDetails || app.interview) && (() => {
+                  const interview = app.interviewDetails || app.interview;
+                  return (
+                    <div className="mt-3 p-3 bg-purple-50/70 rounded-xl border border-purple-100 text-xs text-purple-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span>
+                        <strong>Slot Scheduled:</strong> {interview.round || 'Round 1'} on {interview.date || 'TBD'} at {interview.time || 'TBD'} ({interview.interviewer || 'Interviewer'})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setJoiningInterview(app)}
+                        className="font-bold text-purple-700 hover:text-purple-900 bg-purple-100/80 hover:bg-purple-200/80 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer transition-colors"
+                      >
+                        <Video className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Enter Interview Room</span>
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
@@ -788,11 +832,24 @@ export default function ApplicantManager() {
       )}
 
       {/* Official Offer Letter Modal (Printable & Downloadable Vector PDF) */}
-      <OfferLetterModal
-        isOpen={!!previewOffer}
-        onClose={() => setPreviewOffer(null)}
-        offer={previewOffer}
-      />
+      {previewOffer && (
+        <OfferLetterModal
+          isOpen={!!previewOffer}
+          onClose={() => setPreviewOffer(null)}
+          offer={previewOffer}
+        />
+      )}
+
+      {/* In-App Live Interview Room Modal */}
+      {joiningInterview && (
+        <LiveInterviewRoomModal
+          isOpen={!!joiningInterview}
+          onClose={() => setJoiningInterview(null)}
+          interviewData={joiningInterview}
+          userRole="recruiter"
+          currentUserName="Recruiter Hiring Lead"
+        />
+      )}
 
     </div>
   );

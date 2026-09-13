@@ -26,11 +26,9 @@ import {
 import { api } from '../../services/api';
 
 export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmitTest }) {
-  if (!isOpen || !assessment) return null;
-
-  // Proctoring rules
-  const maxViolations = assessment.proctoringRules?.maxTabSwitches || 3;
-  const initialDurationSeconds = (assessment.durationMinutes || 60) * 60;
+  // Proctoring rules & timing with resilient defaults
+  const maxViolations = assessment?.proctoringRules?.maxTabSwitches || 3;
+  const initialDurationSeconds = (assessment?.durationMinutes || 60) * 60;
 
   // Test state
   const [secondsRemaining, setSecondsRemaining] = useState(initialDurationSeconds);
@@ -42,32 +40,94 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scorecardResult, setScorecardResult] = useState(null);
 
-  // Navigation: sections & questions
-  // We unify MCQs and Coding problems into a single indexed list
+  // Navigation: sections & questions with resilient defaults
+  const mcqs = (assessment?.mcqQuestions && assessment.mcqQuestions.length > 0)
+    ? assessment.mcqQuestions
+    : [
+        {
+          id: 'mcq-1',
+          category: 'Quantitative Aptitude',
+          question: 'A train 240 m long passes a pole in 24 seconds. How long will it take to pass a platform 650 m long?',
+          options: ['65 seconds', '89 seconds', '100 seconds', '150 seconds'],
+          correctOption: 1,
+          marks: 2
+        },
+        {
+          id: 'mcq-2',
+          category: 'Core Computer Science',
+          question: 'Which scheduling algorithm is non-preemptive and selects the process with the smallest burst time?',
+          options: ['Round Robin', 'Shortest Job First (Non-preemptive)', 'Priority Scheduling', 'FCFS'],
+          correctOption: 1,
+          marks: 2
+        }
+      ];
+
+  const codings = (assessment?.codingProblems && assessment.codingProblems.length > 0)
+    ? assessment.codingProblems
+    : [
+        {
+          id: 'code-1',
+          title: 'Two Sum Target Matcher',
+          difficulty: 'Easy',
+          description: 'Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.',
+          inputFormat: 'Array of nums and integer target',
+          outputFormat: '[0, 1]',
+          starterCode: {
+            javascript: `function twoSum(nums, target) {\n  const map = new Map();\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (map.has(complement)) return [map.get(complement), i];\n    map.set(nums[i], i);\n  }\n  return [];\n}`
+          },
+          testCases: [
+            { input: '[2,7,11,15], 9', expectedOutput: '[0,1]', isHidden: false },
+            { input: '[3,2,4], 6', expectedOutput: '[1,2]', isHidden: false }
+          ],
+          marks: 40
+        }
+      ];
+
   const questionsList = [
-    ...(assessment.mcqQuestions || []).map((q, idx) => ({ ...q, type: 'mcq', globalIndex: idx + 1 })),
-    ...(assessment.codingProblems || []).map((p, idx) => ({ ...p, type: 'coding', globalIndex: (assessment.mcqQuestions?.length || 0) + idx + 1 }))
+    ...mcqs.map((q, idx) => ({ ...q, id: q.id || q._id || `mcq-${idx + 1}`, type: 'mcq', globalIndex: idx + 1 })),
+    ...codings.map((p, idx) => ({ ...p, id: p.id || p._id || `code-${idx + 1}`, type: 'coding', globalIndex: mcqs.length + idx + 1 }))
   ];
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentItem = questionsList[currentIndex] || questionsList[0];
 
   // User answers
-  // mcqAnswers: { [questionId]: optionIndex }
   const [mcqAnswers, setMcqAnswers] = useState({});
-  // flaggedQuestions: Set of questionIds
   const [flaggedQuestions, setFlaggedQuestions] = useState(new Set());
-  // codingAnswers: { [problemId]: { code: string, language: string } }
   const [codingAnswers, setCodingAnswers] = useState(() => {
     const initial = {};
-    (assessment.codingProblems || []).forEach(p => {
-      initial[p.id] = {
+    codings.forEach((p, idx) => {
+      const pid = p.id || p._id || `code-${idx + 1}`;
+      initial[pid] = {
         code: p.starterCode?.javascript || '// Write your code here\n',
         language: 'javascript'
       };
     });
     return initial;
   });
+
+  // Reset/sync test state when a new assessment is launched
+  useEffect(() => {
+    if (assessment) {
+      setSecondsRemaining((assessment.durationMinutes || 60) * 60);
+      setCurrentIndex(0);
+      setViolations([]);
+      setShowWarningModal(false);
+      setIsTerminated(false);
+      setScorecardResult(null);
+      setMcqAnswers({});
+      setFlaggedQuestions(new Set());
+      const initial = {};
+      (assessment.codingProblems || codings).forEach((p, idx) => {
+        const pid = p.id || p._id || `code-${idx + 1}`;
+        initial[pid] = {
+          code: p.starterCode?.javascript || '// Write your code here\n',
+          language: 'javascript'
+        };
+      });
+      setCodingAnswers(initial);
+    }
+  }, [assessment?.id, assessment?._id]);
 
   // Code runner console state
   const [activeTestCaseTab, setActiveTestCaseTab] = useState(0);
@@ -76,7 +136,7 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
 
   // Timer countdown
   useEffect(() => {
-    if (scorecardResult || isTerminated) return;
+    if (!isOpen || scorecardResult || isTerminated) return;
 
     const timer = setInterval(() => {
       setSecondsRemaining(prev => {
@@ -90,31 +150,38 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [scorecardResult, isTerminated]);
+  }, [isOpen, scorecardResult, isTerminated]);
 
-  // Anti-Cheating Surveillance: Visibility & Blur listeners
+  // Anti-Cheating Surveillance: Visibility & Blur listeners with initial grace period
   useEffect(() => {
-    if (scorecardResult || isTerminated) return;
+    if (!isOpen || scorecardResult || isTerminated) return;
+
+    let gracePeriod = true;
+    const graceTimer = setTimeout(() => { gracePeriod = false; }, 3000);
 
     const handleVisibilityChange = () => {
+      if (gracePeriod) return;
       if (document.hidden) {
         recordViolation('tab_switch', 'Candidate navigated away from assessment browser tab.');
       }
     };
 
     const handleWindowBlur = () => {
-      // Window lost focus (alt-tab or window split)
-      recordViolation('blur', 'Candidate clicked outside the assessment environment or switched windows.');
+      if (gracePeriod) return;
+      if (document.hidden) {
+        recordViolation('blur', 'Candidate clicked outside the assessment environment or switched windows.');
+      }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
 
     return () => {
+      clearTimeout(graceTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
     };
-  }, [violations, isTerminated, scorecardResult]);
+  }, [isOpen, violations.length, isTerminated, scorecardResult]);
 
   const recordViolation = (event, details) => {
     if (isTerminated || scorecardResult) return;
@@ -284,6 +351,9 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
     }
   };
 
+  // Safe render condition after all hooks have been executed
+  if (!isOpen || !assessment) return null;
+
   // Render Scorecard View after submission
   if (scorecardResult) {
     const isPassed = scorecardResult.passed;
@@ -299,8 +369,8 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
             <span className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full ${isPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
               {isPassed ? 'Assessment Cleared' : (scorecardResult.status === 'terminated_proctoring' ? 'Terminated by Proctor' : 'Cutoff Not Cleared')}
             </span>
-            <h2 className="text-2xl font-black text-slate-900 mt-2">{assessment.title}</h2>
-            <p className="text-xs text-slate-500">{assessment.companyName} Campus Technical Assessment</p>
+            <h2 className="text-2xl font-black text-slate-900 mt-2">{assessment?.title || 'Campus Technical Assessment'}</h2>
+            <p className="text-xs text-slate-500">{assessment?.companyName || 'Campus Recruiter'} Campus Technical Assessment</p>
           </div>
 
           {/* Metric Grid */}
@@ -312,7 +382,7 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
             </div>
             <div>
               <span className="text-[11px] font-semibold text-slate-400 block">Cutoff Required</span>
-              <span className="text-xl font-extrabold text-slate-900">{assessment.passingMarks}%</span>
+              <span className="text-xl font-extrabold text-slate-900">{assessment?.passingMarks || 70}%</span>
               <span className="text-[11px] text-slate-500 block">Direct Interview Shortlist</span>
             </div>
             <div>
@@ -352,9 +422,23 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
     );
   }
 
-  const isCurrentFlagged = flaggedQuestions.has(currentItem.id);
-  const isCurrentMcq = currentItem.type === 'mcq';
-  const currentProblemRun = isCurrentMcq ? null : runResults[currentItem.id];
+  if (!currentItem) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 text-white p-6">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
+          <p className="text-sm text-slate-300">Preparing proctored test environment...</p>
+          <button onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs cursor-pointer">
+            Return to Assessment Center
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isCurrentFlagged = flaggedQuestions.has(currentItem?.id);
+  const isCurrentMcq = currentItem?.type === 'mcq';
+  const currentProblemRun = isCurrentMcq ? null : runResults[currentItem?.id];
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100 select-none overflow-hidden animate-fadeIn">
@@ -362,13 +446,13 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
       {/* Top Proctored Header Bar */}
       <header className="h-14 bg-slate-900 border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-xl">{assessment.companyLogo}</span>
+          <span className="text-xl">{assessment?.companyLogo || '🏢'}</span>
           <div>
             <h3 className="font-bold text-sm text-white truncate max-w-xs sm:max-w-md">
-              {assessment.title}
+              {assessment?.title || 'Campus Technical Assessment'}
             </h3>
             <span className="text-[10px] text-slate-400 font-mono">
-              {assessment.companyName} • Proctored Assessment
+              {assessment?.companyName || 'Campus'} • Proctored Assessment
             </span>
           </div>
         </div>
@@ -473,7 +557,7 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
 
                 {/* Options List */}
                 <div className="space-y-3">
-                  {currentItem.options.map((opt, optIdx) => {
+                  {(currentItem.options || []).map((opt, optIdx) => {
                     const isSelected = mcqAnswers[currentItem.id] === optIdx;
                     return (
                       <button
@@ -636,7 +720,7 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
               <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 text-xs text-left w-full max-w-md space-y-2">
                 <div className="flex justify-between">
                   <span>Questions Answered:</span>
-                  <strong className="text-white font-mono">{Object.keys(mcqAnswers).length} / {assessment.mcqQuestions?.length || 0}</strong>
+                  <strong className="text-white font-mono">{Object.keys(mcqAnswers).length} / {assessment?.mcqQuestions?.length || mcqs.length}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span>Marked for Review:</span>
@@ -644,7 +728,7 @@ export default function TestSandboxModal({ isOpen, onClose, assessment, onSubmit
                 </div>
                 <div className="flex justify-between">
                   <span>Algorithmic Problems:</span>
-                  <strong className="text-indigo-400 font-mono">{assessment.codingProblems?.length || 0} Challenges</strong>
+                  <strong className="text-indigo-400 font-mono">{assessment?.codingProblems?.length || codings.length} Challenges</strong>
                 </div>
               </div>
             </div>

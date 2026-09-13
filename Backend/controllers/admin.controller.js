@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import User from '../models/user.model.js';
 import StudentProfile from '../models/studentProfile.model.js';
 import Job from '../models/job.model.js';
@@ -7,6 +8,8 @@ import Announcement from '../models/announcement.model.js';
 import Interview from '../models/interview.model.js';
 import Notification from '../models/notification.model.js';
 import Application from '../models/application.model.js';
+import RecruiterProfile from '../models/recruiterProfile.model.js';
+import OfferLetter from '../models/offerLetter.model.js';
 
 // Initial Seeds
 const INITIAL_COMPANIES_SEED = [
@@ -155,20 +158,60 @@ export const getDashboardStats = async (req, res, next) => {
       liveDrives,
       pendingCompanies,
       pendingJobs,
-      totalInterviews
+      totalInterviews,
+      placedProfiles,
+      offeredApplications,
+      offerLetters,
+      drives
     ] = await Promise.all([
       StudentProfile.countDocuments(),
       Job.countDocuments(),
       PlacementDrive.countDocuments({ status: 'Live' }),
       Company.countDocuments({ status: 'Pending' }),
       Job.countDocuments({ approved: false }),
-      Interview.countDocuments()
+      Interview.countDocuments(),
+      StudentProfile.countDocuments({ placedCompany: { $exists: true, $ne: null, $ne: '' } }),
+      Application.countDocuments({ $or: [{ status: 'offered' }, { status: 'Offer' }, { status: 'Offered' }, { offerAccepted: true }] }),
+      OfferLetter.find().lean(),
+      PlacementDrive.find().lean()
     ]);
 
-    // Compute or default institutional numbers
-    const studentCount = totalStudents > 0 ? totalStudents : 640;
-    const placedCount = 541; // Derived from institutional placement registry
-    const placementRate = Math.round((placedCount / studentCount) * 100);
+    // Compute genuine institutional placement numbers from real database records
+    const studentCount = totalStudents;
+    const placedCount = Math.min(studentCount, Math.max(placedProfiles, offeredApplications));
+    const placementRate = studentCount > 0 ? Math.min(100, Math.round((placedCount / studentCount) * 100)) : 0;
+
+    // Packages calculation from genuine offers & drives
+    const packagesList = [];
+    offerLetters.forEach(o => {
+      const lpa = o.ctc?.totalLpa;
+      if (typeof lpa === 'number' && !isNaN(lpa) && lpa > 0) {
+        packagesList.push(lpa);
+      }
+    });
+
+    drives.forEach(drv => {
+      if (drv.ctcDisplay) {
+        const match = drv.ctcDisplay.match(/(\d+(\.\d+)?)/);
+        if (match) {
+          const lpa = parseFloat(match[1]);
+          const offeredCandidates = (drv.candidates || []).filter(c => c.status === 'Offered' || c.status === 'offered');
+          if (offeredCandidates.length > 0) {
+            offeredCandidates.forEach(() => packagesList.push(lpa));
+          }
+        }
+      }
+    });
+
+    let averagePackage = '₹0.0 LPA';
+    let highestPackage = '₹0.0 LPA';
+
+    if (packagesList.length > 0) {
+      const highest = Math.max(...packagesList);
+      const avg = packagesList.reduce((a, b) => a + b, 0) / packagesList.length;
+      highestPackage = `₹${highest.toFixed(1)} LPA`;
+      averagePackage = `₹${avg.toFixed(1)} LPA`;
+    }
 
     res.json({
       success: true,
@@ -176,13 +219,13 @@ export const getDashboardStats = async (req, res, next) => {
         totalStudents: studentCount,
         placedStudents: placedCount,
         placementRate,
-        totalJobs: totalJobs || 12,
-        liveDrives: liveDrives || 3,
+        totalJobs: totalJobs || 0,
+        liveDrives: liveDrives || 0,
         pendingCompanyApprovals: pendingCompanies,
         pendingJobApprovals: pendingJobs,
-        activeInterviews: totalInterviews || 8,
-        averagePackage: '₹14.2 LPA',
-        highestPackage: '₹48.0 LPA'
+        activeInterviews: totalInterviews || 0,
+        averagePackage,
+        highestPackage
       }
     });
   } catch (err) {
@@ -194,6 +237,30 @@ export const getDashboardStats = async (req, res, next) => {
 export const getCompanies = async (req, res, next) => {
   try {
     await ensureAdminSeeds();
+
+    // Auto-sync any existing RecruiterProfile without a Company document into Company collection
+    try {
+      const recruiters = await RecruiterProfile.find().populate('user', 'name email').lean();
+      for (const rp of recruiters) {
+        if (rp?.companyName) {
+          const exists = await Company.findOne({ name: rp.companyName });
+          if (!exists) {
+            await Company.create({
+              name: rp.companyName,
+              logo: '🏢',
+              industry: 'Corporate Recruitment',
+              location: 'India',
+              contactPerson: rp.user?.name || 'Recruitment Head',
+              contactEmail: rp.user?.email || 'recruiter@campus.edu',
+              status: rp.isApproved ? 'Approved' : 'Pending',
+            });
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn('Auto-sync recruiters error:', syncErr);
+    }
+
     const companies = await Company.find().sort({ createdAt: -1 }).lean();
     res.json({
       success: true,
@@ -207,16 +274,53 @@ export const getCompanies = async (req, res, next) => {
 // PATCH /api/admin/companies/:id/status - Approve or reject company
 export const updateCompanyStatus = async (req, res, next) => {
   try {
-    const { status, rejectionReason } = req.body;
-    const company = await Company.findById(req.params.id);
+    const { status, rejectionReason, name } = req.body;
+    let company = null;
+
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      company = await Company.findById(req.params.id);
+    }
+
+    if (!company && req.params.id) {
+      const escapedId = req.params.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      company = await Company.findOne({
+        name: new RegExp(`^${escapedId}$`, 'i')
+      });
+    }
+
+    if (!company && name) {
+      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      company = await Company.findOne({
+        name: new RegExp(`^${escapedName}$`, 'i')
+      });
+    }
+
     if (!company) {
-      return res.status(404).json({ message: 'Company not found' });
+      company = new Company({
+        name: name || req.params.id || 'Campus Employer',
+        status: status || 'Approved',
+        logo: '🏢',
+        industry: 'Corporate Recruitment',
+        location: 'India',
+        contactPerson: 'Corporate Relations',
+        contactEmail: 'campus@recruitment.com'
+      });
     }
 
     company.status = status;
-    if (rejectionReason) company.rejectionReason = rejectionReason;
-    company.verifiedBy = req.user?.id;
+    if (rejectionReason !== undefined) company.rejectionReason = rejectionReason;
+    if (req.user?.id) company.verifiedBy = req.user.id;
     await company.save();
+
+    // Sync isApproved status to all recruiter profiles with this company name
+    try {
+      await RecruiterProfile.updateMany(
+        { companyName: company.name },
+        { isApproved: status === 'Approved' }
+      );
+    } catch (rpErr) {
+      console.warn('Sync RecruiterProfile error:', rpErr);
+    }
 
     // Notify recruiter
     try {
@@ -421,6 +525,13 @@ export const getStudents = async (req, res, next) => {
         isBlocked: !!s.isBlocked,
         blockReason: s.blockReason,
         placedCompany: s.placedCompany,
+        skills: s.skills || [],
+        phone: s.phone || '',
+        location: s.location || '',
+        linkedin: s.linkedin || '',
+        github: s.github || '',
+        summary: s.summary || '',
+        resumeUrl: s.resumeUrl || '',
         atsScore: s.atsScore,
         mockInterviewScore: s.mockInterviewScore
       }))

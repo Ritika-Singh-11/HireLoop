@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import OfferLetterModal from '../common/OfferLetterModal';
+import LiveInterviewRoomModal from '../common/LiveInterviewRoomModal';
+import TestSandboxModal from './TestSandboxModal';
 import { api } from '../../services/api';
+import confetti from 'canvas-confetti';
 import { 
   Clock, 
   CheckCircle2, 
@@ -13,74 +16,93 @@ import {
   FileCheck,
   ChevronDown,
   Building,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  Check,
+  Video,
+  Code2,
+  Play
 } from 'lucide-react';
 
 const STATUS_STEPS = ['Applied', 'Shortlisted', 'Interview Scheduled', 'Offer'];
 
 export default function ApplicationTracker() {
-  const { applications, setApplications, student, showToast, addNotification } = useApp();
+  const { 
+    applications, 
+    setApplications, 
+    student, 
+    showToast, 
+    addNotification, 
+    acceptOffer, 
+    declineOffer,
+    assessments,
+    submissions,
+    submitAssessmentAttempt
+  } = useApp();
   const [filterStatus, setFilterStatus] = useState('All');
   const [expandedId, setExpandedId] = useState(null);
   const [selectedOfferApp, setSelectedOfferApp] = useState(null);
+  const [joiningInterview, setJoiningInterview] = useState(null);
+  const [takingAssessment, setTakingAssessment] = useState(null);
 
   const formatOffer = (app) => {
     if (!app) return null;
-    const details = app.offerDetails || {};
-    const pkgNum = parseFloat(details.package ? details.package.replace(/[^0-9.]/g, '') : 18.5) || 18.5;
+    const details = app.offerDetails || app.offer || {};
+    const pkgStr = String(details.package || details.totalLpa || 18.5);
+    const pkgNum = parseFloat(pkgStr.replace(/[^0-9.]/g, '')) || 18.5;
+    const appIdStr = (app.id || app._id || 'APP').toString();
+    const offerCode = details.offerCode || `TPC-OFFER-2026-${appIdStr.slice(-4).toUpperCase()}`;
+
     return {
-      id: app.id,
-      offerCode: `TPC-OFFER-2026-${app.id.slice(-4).toUpperCase()}`,
+      id: app.id || app._id,
+      applicationId: app.id || app._id,
+      offerCode,
       companyName: app.companyName,
       companyLogo: app.companyLogo || '🏢',
       studentName: app.studentName || student.name,
       studentRoll: app.studentRoll || student.rollNumber,
       studentBranch: app.studentBranch || student.branch,
-      designation: details.designation || 'Software Development Engineer - I',
+      designation: details.designation || app.jobTitle || 'Software Development Engineer - I',
       ctc: {
         totalLpa: pkgNum,
-        baseLpa: (pkgNum * 0.75).toFixed(2),
-        variableBonusLpa: (pkgNum * 0.20).toFixed(2),
-        joiningBonus: (pkgNum * 0.05).toFixed(2),
+        baseLpa: details.baseLpa ? Number(details.baseLpa) : Number((pkgNum * 0.75).toFixed(2)),
+        variableBonusLpa: details.variableBonusLpa ? Number(details.variableBonusLpa) : Number((pkgNum * 0.20).toFixed(2)),
+        joiningBonus: details.joiningBonus ? Number(details.joiningBonus) : Number((pkgNum * 0.05).toFixed(2)),
         currency: 'INR'
       },
       joiningDate: details.joiningDate || '2026-07-15',
       location: details.location || 'Bangalore, India',
       status: app.offerAccepted ? 'accepted' : app.offerDeclined ? 'declined' : 'issued',
-      signatoryName: 'Sameer Verma',
-      signatoryTitle: 'Head of Campus Talent Acquisition',
+      signatoryName: details.signatoryName || 'Sameer Verma',
+      signatoryTitle: details.signatoryTitle || 'Head of Campus Talent Acquisition',
       createdAt: app.appliedDate || new Date().toISOString()
     };
   };
 
-  const handleAcceptOffer = (offerId) => {
-    setApplications(prev => prev.map(a => a.id === offerId ? {
-      ...a,
-      offerAccepted: true,
-      history: [...(a.history || []), { status: 'Offer Accepted', date: new Date().toISOString().split('T')[0], note: 'Offer accepted and digitally signed by candidate' }]
-    } : a));
-    setSelectedOfferApp(prev => prev ? { ...prev, offerAccepted: true } : null);
-    addNotification({
-      role: 'admin',
-      title: 'Candidate Accepted Offer',
-      message: `${student.name} accepted the placement offer from ${selectedOfferApp?.companyName}.`,
-      type: 'success',
-      category: 'application'
-    });
+  const handleAcceptOffer = async (offerId) => {
+    if (acceptOffer) {
+      await acceptOffer(offerId);
+    }
+    setSelectedOfferApp(prev => prev ? { ...prev, offerAccepted: true, offerDeclined: false } : null);
   };
 
-  const handleDeclineOffer = (offerId) => {
-    setApplications(prev => prev.map(a => a.id === offerId ? {
-      ...a,
-      offerDeclined: true,
-      history: [...(a.history || []), { status: 'Offer Declined', date: new Date().toISOString().split('T')[0], note: 'Offer declined by candidate' }]
-    } : a));
-    setSelectedOfferApp(prev => prev ? { ...prev, offerDeclined: true } : null);
+  const handleDeclineOffer = async (offerId) => {
+    if (declineOffer) {
+      await declineOffer(offerId);
+    }
+    setSelectedOfferApp(prev => prev ? { ...prev, offerDeclined: true, offerAccepted: false } : null);
   };
 
-  const myApps = applications.filter(a => a.studentId === student.id);
+  const myApps = applications.filter(a => 
+    a.studentId === student.id || 
+    (a.studentEmail && student.email && a.studentEmail.toLowerCase() === student.email.toLowerCase()) ||
+    (a.studentRoll && student.rollNumber && a.studentRoll.toLowerCase() === student.rollNumber.toLowerCase()) ||
+    (!a.studentId && a.studentName === student.name)
+  );
 
-  const filteredApps = myApps.filter(app => {
+  const displayApps = myApps.length > 0 ? myApps : applications;
+
+  const filteredApps = displayApps.filter(app => {
     if (filterStatus === 'All') return true;
     return app.status === filterStatus;
   });
@@ -245,63 +267,208 @@ export default function ApplicationTracker() {
                 </div>
 
                 {/* Offer Letter Box if extended */}
-                {app.status === 'Offer' && app.offerDetails && (
-                  <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md">
-                        <Trophy className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                          Official Campus Placement Offer
+                {(app.status === 'Offer' || app.status === 'Offered' || app.offerAccepted || app.offerDeclined) && (() => {
+                  const offerDetails = app.offerDetails || {
+                    designation: app.jobTitle || 'Software Development Engineer',
+                    package: '₹18.5 LPA',
+                    joiningDate: '2026-07-15',
+                    location: 'Bangalore, India'
+                  };
+                  return (
+                    <div className={`mt-6 p-5 rounded-2xl border transition-all ${
+                      app.offerAccepted 
+                        ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-emerald-300 shadow-sm'
+                        : app.offerDeclined
+                        ? 'bg-slate-50 border-slate-200'
+                        : 'bg-gradient-to-r from-amber-50/70 via-emerald-50/70 to-teal-50 border-amber-200 shadow-md'
+                    }`}>
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        
+                        <div className="flex items-start gap-3.5">
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md shrink-0 ${
+                            app.offerAccepted
+                              ? 'bg-emerald-600 shadow-emerald-600/30'
+                              : app.offerDeclined
+                              ? 'bg-slate-500 shadow-slate-500/20'
+                              : 'bg-indigo-600 shadow-indigo-600/30 animate-pulse'
+                          }`}>
+                            {app.offerAccepted ? <CheckCircle2 className="w-6 h-6" /> : <Trophy className="w-6 h-6" />}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                                Official Campus Placement Offer
+                              </span>
+                              {app.offerAccepted ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                  Accepted & Digitally Signed
+                                </span>
+                              ) : app.offerDeclined ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                                  <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                  Offer Declined
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                                  Decision Pending
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-sm font-extrabold text-slate-950 mt-1">
+                              {offerDetails.designation} • CTC: <span className="text-emerald-700 font-mono text-base">{offerDetails.package}</span>
+                            </div>
+
+                            <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                              <span>Joining Date: <strong>{offerDetails.joiningDate}</strong></span>
+                              <span>•</span>
+                              <span>Location: <strong>{offerDetails.location}</strong></span>
+                              {app.offerAccepted && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-emerald-700 font-medium">Status: Employment confirmed</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-sm font-extrabold text-slate-900">
-                          Designation: {app.offerDetails.designation} • CTC: <span className="text-emerald-700">{app.offerDetails.package}</span>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap items-center gap-2 lg:shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200/60">
+                          {!app.offerAccepted && !app.offerDeclined && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleDeclineOffer(app.id || app._id)}
+                                className="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-xs font-bold border border-slate-300 hover:border-rose-200 transition-colors cursor-pointer"
+                              >
+                                Decline Offer
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleAcceptOffer(app.id || app._id)}
+                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Check className="w-4 h-4" />
+                                <span>Accept & Sign</span>
+                              </button>
+                            </>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOfferApp(app)}
+                            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <FileCheck className="w-4 h-4 text-emerald-400" />
+                            <span>{app.offerAccepted ? 'View Signed Offer (PDF)' : 'View Full Offer (PDF)'}</span>
+                          </button>
                         </div>
-                        <div className="text-[11px] text-slate-600">
-                          Joining Date: {app.offerDetails.joiningDate} • Location: {app.offerDetails.location}
-                        </div>
+
                       </div>
                     </div>
-                    <button
-                      onClick={() => setSelectedOfferApp(app)}
-                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <FileCheck className="w-4 h-4" />
-                      <span>View Official Offer Letter (PDF)</span>
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
+
+                {/* Online Assessment (OA Round) Callout if Shortlisted */}
+                {(app.status === 'Shortlisted' || app.status === 'shortlisted' || app.status === 'Assessment' || app.status === 'OA') && (() => {
+                  const completedSub = (submissions || []).find(s => 
+                    (s.companyName && app.companyName && s.companyName.toLowerCase() === app.companyName.toLowerCase()) ||
+                    s.assessmentId === app.jobId
+                  );
+                  return (
+                    <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-indigo-50 via-purple-50/50 to-indigo-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shrink-0">
+                          <Code2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-indigo-900 uppercase tracking-wider">
+                              Round 2: Online Technical Assessment (OA)
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse">
+                              Test Link Active
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                            {app.companyName} Campus Screening Challenge • 60 Mins Timed Sandbox
+                          </div>
+                          <div className="text-[11px] text-slate-600 mt-0.5">
+                            {completedSub ? (
+                              <span className={completedSub.passed ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                                Verified Score: {completedSub.percentage}% ({completedSub.passed ? 'PASSED' : 'NOT CLEARED'})
+                              </span>
+                            ) : (
+                              'Includes Core Computer Science & Aptitude MCQs + Algorithmic Coding Challenge.'
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const matchedAsm = (assessments || []).find(a => 
+                            a.jobId === app.jobId || 
+                            (a.companyName && app.companyName && a.companyName.toLowerCase() === app.companyName.toLowerCase())
+                          ) || assessments?.[0] || {
+                            id: 'asm-1',
+                            title: `${app.companyName} Campus Technical Assessment`,
+                            companyName: app.companyName,
+                            companyLogo: app.companyLogo || '💻',
+                            durationMinutes: 60,
+                            passingMarks: 60
+                          };
+                          setTakingAssessment(matchedAsm);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current text-emerald-300" />
+                        <span>{completedSub ? 'Retake / Practice OA' : 'Launch OA Test Sandbox'}</span>
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* Interview Callout if scheduled */}
-                {app.status === 'Interview Scheduled' && app.interviewDetails && (
-                  <div className="mt-6 p-4 rounded-xl bg-indigo-50/80 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
-                        <Calendar className="w-5 h-5" />
+                {(app.status === 'Interview Scheduled' || app.status === 'interview_scheduled' || app.interviewDetails || app.interview) && (
+                  (() => {
+                    const interview = app.interviewDetails || app.interview || {};
+                    return (
+                      <div className="mt-6 p-4 rounded-xl bg-indigo-50/80 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
+                            <Calendar className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider">
+                              {interview.round || 'Technical Interview'}
+                            </div>
+                            <div className="text-xs font-semibold text-slate-800">
+                              {interview.date || 'TBD'} at {interview.time || 'TBD'} {interview.interviewer ? `(Interviewer: ${interview.interviewer})` : ''}
+                            </div>
+                            {interview.notes && (
+                              <div className="text-[11px] text-slate-600 mt-0.5">
+                                {interview.notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setJoiningInterview(app)}
+                          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+                        >
+                          <Video className="w-4 h-4 text-emerald-300" />
+                          <span>Join Live Interview Room</span>
+                        </button>
                       </div>
-                      <div>
-                        <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider">
-                          {app.interviewDetails.round}
-                        </div>
-                        <div className="text-xs font-semibold text-slate-800">
-                          {app.interviewDetails.date} at {app.interviewDetails.time} (Interviewer: {app.interviewDetails.interviewer})
-                        </div>
-                        <div className="text-[11px] text-slate-600 mt-0.5">
-                          {app.interviewDetails.notes}
-                        </div>
-                      </div>
-                    </div>
-                    <a
-                      href={app.interviewDetails.meetLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      <span>Join Live Meeting</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
+                    );
+                  })()
                 )}
 
                 {/* Collapsible Timeline History */}
@@ -337,13 +504,36 @@ export default function ApplicationTracker() {
       </div>
 
       {/* Official Offer Letter Modal */}
-      <OfferLetterModal
-        isOpen={!!selectedOfferApp}
-        onClose={() => setSelectedOfferApp(null)}
-        offer={formatOffer(selectedOfferApp)}
-        onAccept={handleAcceptOffer}
-        onDecline={handleDeclineOffer}
-      />
+      {selectedOfferApp && (
+        <OfferLetterModal
+          isOpen={!!selectedOfferApp}
+          onClose={() => setSelectedOfferApp(null)}
+          offer={formatOffer(selectedOfferApp)}
+          onAccept={handleAcceptOffer}
+          onDecline={handleDeclineOffer}
+        />
+      )}
+
+      {/* In-App Live Interview Room Modal */}
+      {joiningInterview && (
+        <LiveInterviewRoomModal
+          isOpen={!!joiningInterview}
+          onClose={() => setJoiningInterview(null)}
+          interviewData={joiningInterview}
+          userRole="student"
+          currentUserName={student?.name || 'Candidate'}
+        />
+      )}
+
+      {/* Proctored Assessment Sandbox Modal */}
+      {takingAssessment && (
+        <TestSandboxModal
+          isOpen={!!takingAssessment}
+          onClose={() => setTakingAssessment(null)}
+          assessment={takingAssessment}
+          onSubmitTest={submitAssessmentAttempt}
+        />
+      )}
 
     </div>
   );

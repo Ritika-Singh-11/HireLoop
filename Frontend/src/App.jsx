@@ -254,10 +254,10 @@ function AppContent() {
           <>
             {studentTab === 'dashboard' && <StudentDashboard onNavigate={setStudentTab} />}
             {studentTab === 'profile' && <StudentProfile onNavigate={setStudentTab} />}
-            {studentTab === 'jobs' && <JobBoard />}
-            {studentTab === 'drives' && <StudentDrivesPortal />}
-            {studentTab === 'applications' && <ApplicationTracker />}
-            {studentTab === 'assessments' && <AssessmentCenter />}
+            {studentTab === 'jobs' && <JobBoard onNavigate={setStudentTab} />}
+            {studentTab === 'drives' && <StudentDrivesPortal onNavigate={setStudentTab} />}
+            {studentTab === 'applications' && <ApplicationTracker onNavigate={setStudentTab} />}
+            {studentTab === 'assessments' && <AssessmentCenter onNavigate={setStudentTab} />}
             {studentTab === 'resume-builder' && <ResumeBuilder />}
             {studentTab === 'resume-analyzer' && <ResumeAnalyzer />}
             {studentTab === 'mock-interview' && <MockInterview />}
