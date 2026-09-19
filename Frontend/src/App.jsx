@@ -4,6 +4,7 @@ import AppLayout from './components/layout/AppLayout';
 import PaymentModal from './components/common/PaymentModal';
 import AuthModal from './components/auth/AuthModal';
 import WelcomeGate from './components/auth/WelcomeGate';
+import HomePage from './components/home/HomePage';
 
 // Student Components
 import StudentDashboard from './components/student/StudentDashboard';
@@ -96,58 +97,55 @@ function AppContent() {
         </div>
       )}
 
-      {/* Modern Enterprise Layout with Sidebar & TopHeader */}
-      <AppLayout activeTab={currentActiveTab} onNavigate={handleNavigate}>
-        {/* If not authenticated in the selected role panel: show Role-Specific Gate */}
-        {!currentUser ? (
-          <WelcomeGate targetRole={currentRole} />
-        ) : (
-          <>
-            {/* STUDENT ROLE SCREENS */}
-            {currentRole === 'student' && (
-              <>
-                {studentTab === 'dashboard' && <StudentDashboard onNavigate={setStudentTab} />}
-                {studentTab === 'profile' && <StudentProfile onNavigate={setStudentTab} />}
-                {studentTab === 'jobs' && <JobBoard onNavigate={setStudentTab} />}
-                {studentTab === 'drives' && <StudentDrivesPortal onNavigate={setStudentTab} />}
-                {studentTab === 'applications' && <ApplicationTracker onNavigate={setStudentTab} />}
-                {studentTab === 'assessments' && <AssessmentCenter onNavigate={setStudentTab} />}
-                {studentTab === 'resume-builder' && <ResumeBuilder />}
-                {studentTab === 'resume-analyzer' && <ResumeAnalyzer />}
-                {studentTab === 'mock-interview' && <MockInterview />}
-              </>
-            )}
+      {/* If not authenticated: show Public Home / Landing Page */}
+      {!currentUser ? (
+        <HomePage />
+      ) : (
+        <AppLayout activeTab={currentActiveTab} onNavigate={handleNavigate}>
+          {/* STUDENT ROLE SCREENS */}
+          {currentRole === 'student' && (
+            <>
+              {studentTab === 'dashboard' && <StudentDashboard onNavigate={setStudentTab} />}
+              {studentTab === 'profile' && <StudentProfile onNavigate={setStudentTab} />}
+              {studentTab === 'jobs' && <JobBoard onNavigate={setStudentTab} />}
+              {studentTab === 'drives' && <StudentDrivesPortal onNavigate={setStudentTab} />}
+              {studentTab === 'applications' && <ApplicationTracker onNavigate={setStudentTab} />}
+              {studentTab === 'assessments' && <AssessmentCenter onNavigate={setStudentTab} />}
+              {studentTab === 'resume-builder' && <ResumeBuilder />}
+              {studentTab === 'resume-analyzer' && <ResumeAnalyzer />}
+              {studentTab === 'mock-interview' && <MockInterview />}
+            </>
+          )}
 
-            {/* RECRUITER ROLE SCREENS */}
-            {currentRole === 'recruiter' && (
-              <>
-                {recruiterTab === 'dashboard' && <RecruiterDashboard onNavigate={setRecruiterTab} />}
-                {recruiterTab === 'applicants' && <ApplicantManager />}
-              </>
-            )}
+          {/* RECRUITER ROLE SCREENS */}
+          {currentRole === 'recruiter' && (
+            <>
+              {recruiterTab === 'dashboard' && <RecruiterDashboard onNavigate={setRecruiterTab} />}
+              {recruiterTab === 'applicants' && <ApplicantManager />}
+            </>
+          )}
 
-            {/* PLACEMENT CELL (TPC ADMIN) ROLE SCREENS */}
-            {currentRole === 'admin' && (
-              <>
-                {adminTab === 'dashboard' && <PlacementDashboard onNavigate={setAdminTab} />}
-                {adminTab === 'students' && <StudentManagement />}
-                {adminTab === 'approvals' && <CompanyApprovals />}
-                {adminTab === 'job-approvals' && <JobApprovals />}
-                {adminTab === 'eligibility' && <EligibilityManager />}
-                {adminTab === 'drives' && <DriveManager />}
-                {adminTab === 'applications' && <ApplicationMasterTracker />}
-                {adminTab === 'interviews' && <InterviewScheduler />}
-                {adminTab === 'announcements' && <AnnouncementBoard />}
-                {adminTab === 'analytics' && <PlacementAnalytics />}
-                {adminTab === 'ai-matching' && <AiPlacementIntelligence />}
-                {adminTab === 'reports' && <PlacementReports />}
-                {adminTab === 'roles' && <TpoRoleManager />}
-                {adminTab === 'fraud-monitor' && <FraudActivityMonitor />}
-              </>
-            )}
-          </>
-        )}
-      </AppLayout>
+          {/* PLACEMENT CELL (TPC ADMIN) ROLE SCREENS */}
+          {currentRole === 'admin' && (
+            <>
+              {adminTab === 'dashboard' && <PlacementDashboard onNavigate={setAdminTab} />}
+              {adminTab === 'students' && <StudentManagement />}
+              {adminTab === 'approvals' && <CompanyApprovals />}
+              {adminTab === 'job-approvals' && <JobApprovals />}
+              {adminTab === 'eligibility' && <EligibilityManager />}
+              {adminTab === 'drives' && <DriveManager />}
+              {adminTab === 'applications' && <ApplicationMasterTracker />}
+              {adminTab === 'interviews' && <InterviewScheduler />}
+              {adminTab === 'announcements' && <AnnouncementBoard />}
+              {adminTab === 'analytics' && <PlacementAnalytics />}
+              {adminTab === 'ai-matching' && <AiPlacementIntelligence />}
+              {adminTab === 'reports' && <PlacementReports />}
+              {adminTab === 'roles' && <TpoRoleManager />}
+              {adminTab === 'fraud-monitor' && <FraudActivityMonitor />}
+            </>
+          )}
+        </AppLayout>
+      )}
 
       {/* Global Modals */}
       <PaymentModal />

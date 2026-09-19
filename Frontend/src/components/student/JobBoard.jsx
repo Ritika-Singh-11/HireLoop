@@ -21,7 +21,7 @@ import { checkCandidateEligibility } from '../../utils/eligibilityHelper';
 import CoverLetterModal from './CoverLetterModal';
 
 export default function JobBoard() {
-  const { jobs, applications, applyToJob, student, eligibilityPolicy } = useApp();
+  const { jobs, applications, applyToJob, student, eligibilityPolicy, companies } = useApp();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('All');
@@ -30,6 +30,16 @@ export default function JobBoard() {
   const [onlyEligible, setOnlyEligible] = useState(false);
   const [coverLetterJob, setCoverLetterJob] = useState(null);
   const [expandedJobId, setExpandedJobId] = useState(null);
+
+  // Set of rejected companies from TPO
+  const rejectedCompaniesSet = useMemo(() => {
+    return new Set(
+      (companies || [])
+        .filter(c => c.status === 'Rejected')
+        .map(c => String(c.name || '').toLowerCase().trim())
+        .filter(Boolean)
+    );
+  }, [companies]);
 
   // Check if job is applied
   const appliedJobIds = useMemo(() => {
@@ -83,7 +93,11 @@ export default function JobBoard() {
   // Filtered jobs with smart match scores & synchronized college/company eligibility
   const processedJobs = useMemo(() => {
     return jobs
-      .filter(job => job.approved)
+      .filter(job => 
+        job.approved && 
+        !job.rejected && 
+        !rejectedCompaniesSet.has(String(job.companyName || '').toLowerCase().trim())
+      )
       .map(job => {
         const matchScore = calculateJobMatchScore(student, job);
         

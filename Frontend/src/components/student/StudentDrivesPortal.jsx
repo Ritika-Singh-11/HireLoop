@@ -24,11 +24,29 @@ import DrivePassModal from './DrivePassModal';
 import TestSandboxModal from './TestSandboxModal';
 
 export default function StudentDrivesPortal({ onNavigate }) {
-  const { student, drivesList, setDrivesList, showToast, assessments, eligibilityPolicy, applications } = useApp();
+  const { student, drivesList, setDrivesList, showToast, assessments, eligibilityPolicy, applications, companies } = useApp();
   const [selectedPass, setSelectedPass] = useState(null);
   const [isPassModalOpen, setIsPassModalOpen] = useState(false);
   const [registeringDriveId, setRegisteringDriveId] = useState(null);
   const [takingAssessment, setTakingAssessment] = useState(null);
+
+  // Set of rejected companies from TPO
+  const rejectedCompaniesSet = React.useMemo(() => {
+    return new Set(
+      (companies || [])
+        .filter(c => c.status === 'Rejected')
+        .map(c => String(c.name || '').toLowerCase().trim())
+        .filter(Boolean)
+    );
+  }, [companies]);
+
+  const activeDrives = React.useMemo(() => {
+    return (drivesList || []).filter(drive => 
+      !drive.rejected && 
+      drive.status !== 'Cancelled' &&
+      !rejectedCompaniesSet.has(String(drive.companyName || '').toLowerCase().trim())
+    );
+  }, [drivesList, rejectedCompaniesSet]);
 
   // Sync drives from backend
   useEffect(() => {
@@ -165,14 +183,14 @@ export default function StudentDrivesPortal({ onNavigate }) {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200">
-            {drivesList.length} Active Drives
+            {activeDrives.length} Active Drives
           </span>
         </div>
       </div>
 
       {/* Drives Grid */}
       <div className="space-y-4">
-        {drivesList.map((drive) => {
+        {activeDrives.map((drive) => {
           const { 
             isEligible, 
             passesCollege, 

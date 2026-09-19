@@ -3,7 +3,17 @@ import { useApp } from '../../context/AppContext';
 import { X, Briefcase, DollarSign, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function PostJobModal({ isOpen, onClose }) {
-  const { addJob, openPaymentModal, currentUser } = useApp();
+  const { addJob, openPaymentModal, currentUser, companies, showToast } = useApp();
+
+  const isRejected = React.useMemo(() => {
+    const compName = (currentUser?.companyName || '').toLowerCase().trim();
+    if (!compName) return false;
+    const comp = (companies || []).find(c => 
+      (c.name && c.name.toLowerCase().trim() === compName) ||
+      (c.id && c.id === currentUser?.companyId)
+    );
+    return comp?.status === 'Rejected';
+  }, [companies, currentUser]);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -47,6 +57,10 @@ export default function PostJobModal({ isOpen, onClose }) {
   };
 
   const handleDirectPost = () => {
+    if (isRejected) {
+      if (showToast) showToast('Cannot post job: Company is rejected by TPO Directorate', 'error');
+      return;
+    }
     const preparedJob = {
       ...formData,
       salaryMin: parseFloat(formData.salaryMin),
@@ -63,6 +77,11 @@ export default function PostJobModal({ isOpen, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    if (isRejected) {
+      if (showToast) showToast('Cannot post job: Company is rejected by TPO Directorate', 'error');
+      return;
+    }
 
     const preparedJob = {
       ...formData,
@@ -120,7 +139,12 @@ export default function PostJobModal({ isOpen, onClose }) {
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
-          
+          {isRejected && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold">
+              ⚠️ Posting disabled: "{currentUser?.companyName}" registration was declined by TPO Directorate.
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Job Role Title *</label>

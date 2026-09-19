@@ -1119,6 +1119,36 @@ export function AppProvider({ children }) {
       return updated;
     });
 
+    // Deactivate all jobs from this rejected company
+    setJobs(prevJobs => {
+      const updatedJobs = prevJobs.map(j => {
+        const matchesJob = 
+          (j.companyName && String(j.companyName).toLowerCase().trim() === String(companyName).toLowerCase().trim()) ||
+          (j.companyId && String(j.companyId) === String(companyIdOrName));
+        if (matchesJob) {
+          return { ...j, approved: false, rejected: true };
+        }
+        return j;
+      });
+      try {
+        localStorage.setItem('recruitloop_jobs', JSON.stringify(updatedJobs));
+      } catch {}
+      return updatedJobs;
+    });
+
+    // Deactivate campus drives from this rejected company
+    setDrivesList(prevDrives => {
+      return prevDrives.map(d => {
+        const matchesDrive = 
+          (d.companyName && String(d.companyName).toLowerCase().trim() === String(companyName).toLowerCase().trim()) ||
+          (d.companyId && String(d.companyId) === String(companyIdOrName));
+        if (matchesDrive) {
+          return { ...d, status: 'Cancelled', rejected: true };
+        }
+        return d;
+      });
+    });
+
     addNotification({
       role: 'recruiter',
       title: 'Company Verification Notice',

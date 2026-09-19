@@ -23,14 +23,8 @@ export default function ResumeUploader({ onNavigateToAts }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
-  // Extract initial resume state from student profile or defaults
-  const activeResume = student.resumeFile || {
-    fileName: 'Rohan_Verma_FullStack_Resume_2026.pdf',
-    fileSize: 248500,
-    uploadedAt: '2026-09-04',
-    url: student.resumeUrl || '#',
-    text: student.resumeData?.summary || '',
-  };
+  // Extract initial resume state from student profile (no fake default resume!)
+  const activeResume = student.resumeFile || null;
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 KB';
@@ -173,6 +167,13 @@ export default function ResumeUploader({ onNavigateToAts }) {
         <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span>{uploadError}</span>
+        </div>
+      )}
+
+      {!activeResume && (
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2.5">
+          <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+          <span>No official PDF resume uploaded yet. Upload your verified resume below to enable 1-Click campus job applications and AI ATS scanning.</span>
         </div>
       )}
 

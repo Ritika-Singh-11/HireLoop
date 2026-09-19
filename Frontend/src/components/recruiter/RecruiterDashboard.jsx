@@ -13,18 +13,29 @@ import {
   ArrowRight,
   TrendingUp,
   Sliders,
-  GraduationCap
+  GraduationCap,
+  ShieldAlert
 } from 'lucide-react';
 import PostJobModal from './PostJobModal';
 import EditJobModal from './EditJobModal';
 
 export default function RecruiterDashboard({ onNavigate }) {
-  const { jobs, applications, currentUser } = useApp();
+  const { jobs, applications, currentUser, companies } = useApp();
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
 
   const recruiterCompany = (currentUser?.companyName || '').toLowerCase().trim();
   const isDemoRecruiter = !currentUser?.companyName || currentUser?.email === 'neha.recruiter@razorpay.com';
+
+  const currentCompanyObj = React.useMemo(() => {
+    if (!recruiterCompany) return null;
+    return (companies || []).find(c => 
+      (c.name && c.name.toLowerCase().trim() === recruiterCompany) ||
+      (c.id && c.id === currentUser?.companyId)
+    );
+  }, [companies, recruiterCompany, currentUser]);
+
+  const isRejected = currentCompanyObj?.status === 'Rejected';
 
   const myJobs = React.useMemo(() => {
     if (!recruiterCompany) return jobs;
@@ -53,6 +64,21 @@ export default function RecruiterDashboard({ onNavigate }) {
   return (
     <div className="space-y-6">
       
+      {/* Rejection Alert Banner if TPO rejected this company */}
+      {isRejected && (
+        <div className="p-4 rounded-[14px] bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3 animate-fadeIn">
+          <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <p className="font-bold text-sm text-rose-900">
+              Company Registration Declined by TPO Directorate
+            </p>
+            <p className="text-rose-700 leading-relaxed">
+              Your organization "{currentUser?.companyName}" has been marked as Rejected by the campus placement cell. Posting new campus job openings, receiving new student applications, and coordinating drives are disabled. Please contact the TPO Directorate for resolution.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Recruiter Welcome Header */}
       <div className="bg-white rounded-[14px] border border-[#E2E8F0] p-6 sm:p-7 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -76,8 +102,17 @@ export default function RecruiterDashboard({ onNavigate }) {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setIsPostModalOpen(true)}
-              className="px-4 py-2 rounded-lg bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white font-semibold text-xs transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
+              onClick={() => {
+                if (isRejected) return;
+                setIsPostModalOpen(true);
+              }}
+              disabled={isRejected}
+              className={`px-4 py-2 rounded-lg font-semibold text-xs transition-colors shadow-xs flex items-center gap-2 ${
+                isRejected 
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                  : 'bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white cursor-pointer'
+              }`}
+              title={isRejected ? 'Disabled: Company is rejected by TPO' : 'Post New Campus Job'}
             >
               <Plus className="w-4 h-4" />
               <span>Post New Campus Job</span>
