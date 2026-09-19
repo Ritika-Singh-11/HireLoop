@@ -23,19 +23,39 @@ export default function StudentProfile({ onNavigate }) {
   const { student, setStudent, updateStudentProfile, showToast, addNotification } = useApp();
 
   const [formData, setFormData] = useState({
-    name: student.name || '',
-    email: student.email || '',
-    phone: student.phone || '',
-    rollNumber: student.rollNumber || '',
-    branch: student.branch || '',
-    batch: student.batch || '2026',
-    cgpa: student.cgpa || 8.5,
-    location: student.resumeData?.location || 'Bangalore, India',
-    linkedin: student.resumeData?.linkedin || '',
-    github: student.resumeData?.github || '',
-    summary: student.resumeData?.summary || '',
-    skills: student.skills || []
+    name: student?.name || '',
+    email: student?.email || '',
+    phone: student?.phone || '',
+    rollNumber: student?.rollNumber || '',
+    branch: student?.branch || '',
+    batch: student?.batch || '2026',
+    cgpa: student?.cgpa !== undefined ? student.cgpa : 8.5,
+    location: student?.location || student?.resumeData?.location || '',
+    linkedin: student?.linkedin || student?.resumeData?.linkedin || '',
+    github: student?.github || student?.resumeData?.github || '',
+    summary: student?.summary || student?.resumeData?.summary || '',
+    skills: student?.skills || []
   });
+
+  // Sync formData whenever logged-in student changes
+  React.useEffect(() => {
+    if (student) {
+      setFormData({
+        name: student.name || '',
+        email: student.email || '',
+        phone: student.phone || '',
+        rollNumber: student.rollNumber || '',
+        branch: student.branch || '',
+        batch: student.batch || '2026',
+        cgpa: student.cgpa !== undefined ? student.cgpa : 8.5,
+        location: student.location || student.resumeData?.location || '',
+        linkedin: student.linkedin || student.resumeData?.linkedin || '',
+        github: student.github || student.resumeData?.github || '',
+        summary: student.summary || student.resumeData?.summary || '',
+        skills: student.skills || []
+      });
+    }
+  }, [student]);
 
   const [newSkillInput, setNewSkillInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);

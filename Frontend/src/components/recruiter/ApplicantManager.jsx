@@ -29,7 +29,29 @@ import LiveInterviewRoomModal from '../common/LiveInterviewRoomModal';
 import { api } from '../../services/api';
 
 export default function ApplicantManager() {
-  const { applications, jobs, updateApplicationStatus, showToast } = useApp();
+  const { applications, jobs, updateApplicationStatus, showToast, currentUser } = useApp();
+
+  const recruiterCompany = (currentUser?.companyName || '').toLowerCase().trim();
+  const isDemoRecruiter = !currentUser?.companyName || currentUser?.email === 'neha.recruiter@razorpay.com';
+
+  const myJobs = useMemo(() => {
+    if (!recruiterCompany && isDemoRecruiter) return jobs;
+    return jobs.filter(j => 
+      (j.companyName && j.companyName.toLowerCase().trim() === recruiterCompany) ||
+      (j.recruiterId && j.recruiterId === currentUser?.id) ||
+      (isDemoRecruiter && (!j.companyName || j.companyName.toLowerCase() === 'razorpay'))
+    );
+  }, [jobs, recruiterCompany, currentUser, isDemoRecruiter]);
+
+  const myJobIds = useMemo(() => new Set(myJobs.map(j => String(j.id || j._id))), [myJobs]);
+
+  const companyApplications = useMemo(() => {
+    if (!recruiterCompany && isDemoRecruiter) return applications;
+    return applications.filter(a => 
+      myJobIds.has(String(a.jobId)) ||
+      (recruiterCompany && a.companyName && a.companyName.toLowerCase().trim() === recruiterCompany)
+    );
+  }, [applications, myJobIds, recruiterCompany, isDemoRecruiter]);
 
   const [selectedJobId, setSelectedJobId] = useState('All');
   const [minCgpaFilter, setMinCgpaFilter] = useState('0');
@@ -54,13 +76,13 @@ export default function ApplicantManager() {
     joiningBonus: 1.5,
     joiningDate: '2026-07-15',
     location: 'Bengaluru HQ / Hybrid',
-    signatoryName: 'Campus Talent Acquisition Head',
+    signatoryName: currentUser?.name || 'Campus Talent Acquisition Head',
     signatoryTitle: 'Director - University Relations & Hiring',
     termsAndConditions: 'Subject to successful degree completion with minimum 7.0 CGPA and standard background verification.'
   });
 
   const filteredApplicants = useMemo(() => {
-    return applications.filter(app => {
+    return companyApplications.filter(app => {
       if (selectedJobId !== 'All' && String(app.jobId) !== String(selectedJobId)) return false;
       if (statusFilter !== 'All') {
         if (statusFilter === 'TPO Recommended') {
@@ -82,10 +104,10 @@ export default function ApplicantManager() {
       }
       return true;
     });
-  }, [applications, selectedJobId, statusFilter, branchFilter, minCgpaFilter, skillSearch]);
+  }, [companyApplications, selectedJobId, statusFilter, branchFilter, minCgpaFilter, skillSearch]);
 
   const openIssueOfferModal = (app) => {
-    const matchedJob = jobs.find(j => j.id === app.jobId);
+    const matchedJob = myJobs.find(j => j.id === app.jobId) || jobs.find(j => j.id === app.jobId);
     const ctcStr = String(matchedJob?.salary || '20 LPA');
     const parsedNum = parseFloat(ctcStr.replace(/[^0-9.]/g, '')) || 20.0;
     const base = (parsedNum * 0.75).toFixed(1);
@@ -100,7 +122,7 @@ export default function ApplicantManager() {
       joiningBonus: parseFloat(join),
       joiningDate: '2026-07-15',
       location: matchedJob?.location || 'Bengaluru HQ / Hybrid',
-      signatoryName: 'Arun Sharma',
+      signatoryName: currentUser?.name || 'Head of Campus Talent Acquisition',
       signatoryTitle: 'Head of Campus Talent Acquisition',
       termsAndConditions: 'Subject to successful completion of degree with minimum 7.0 CGPA and standard background verification clearance.'
     });
@@ -271,8 +293,10 @@ export default function ApplicantManager() {
               onChange={(e) => setSelectedJobId(e.target.value)}
               className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-500"
             >
-              <option value="All">All Campus Openings ({jobs.length})</option>
-              {jobs.map(j => (
+              <option value="All">
+                {currentUser?.companyName ? `${currentUser.companyName} Openings (${myJobs.length})` : `All Campus Openings (${myJobs.length})`}
+              </option>
+              {myJobs.map(j => (
                 <option key={j.id} value={j.id}>
                   {j.companyName} — {j.title}
                 </option>

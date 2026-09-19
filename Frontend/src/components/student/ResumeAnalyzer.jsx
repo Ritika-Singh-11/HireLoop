@@ -22,53 +22,113 @@ import { analyzeResumeATS } from '../../utils/aiEngine';
 import { api } from '../../services/api';
 import AiSettingsModal from '../common/AiSettingsModal';
 
+const buildResumeText = (s) => {
+  if (!s) return '';
+  const uploaded = s.resumeFile?.text || s.resumeData?.rawExtractedText;
+  if (uploaded && uploaded.length > 50) return uploaded;
+
+  const isDemo = s.email === 'aarav.sharma@campus.edu';
+  const rData = s.resumeData || {};
+
+  const lines = [];
+  lines.push(rData.fullName || s.name || 'Candidate Name');
+
+  const contact = [];
+  if (s.email) contact.push(`Email: ${s.email}`);
+  if (s.phone) contact.push(`Phone: ${s.phone}`);
+  if (rData.location) contact.push(rData.location);
+  if (contact.length) lines.push(contact.join(' | '));
+
+  const links = [];
+  if (rData.linkedin) links.push(`LinkedIn: ${rData.linkedin}`);
+  if (rData.github) links.push(`GitHub: ${rData.github}`);
+  if (links.length) lines.push(links.join(' | '));
+
+  lines.push('');
+  lines.push('SUMMARY');
+  lines.push(
+    rData.summary ||
+    (isDemo
+      ? 'Driven Computer Science undergraduate with practical experience across full-stack engineering and cloud-native systems.'
+      : 'Motivated engineering student with a strong technical foundation and enthusiasm for software engineering challenges.')
+  );
+
+  lines.push('');
+  lines.push('EDUCATION');
+  if (Array.isArray(rData.education) && rData.education.length > 0) {
+    rData.education.forEach(edu => {
+      lines.push(`${edu.degree || 'Degree'} - ${edu.institution || 'University'} (Score: ${edu.score || 'N/A'}) ${edu.year || ''}`);
+    });
+  } else if (isDemo) {
+    lines.push('B.Tech in Computer Science & Engineering - NIT (CGPA: 8.85 / 10) 2022 - 2026');
+    lines.push('Class XII CBSE - 96.2%');
+  } else {
+    lines.push(`${s.branch || 'B.Tech'} - Campus University (CGPA: ${s.cgpa || 'N/A'} / 10) [Roll: ${s.rollNumber || 'N/A'}]`);
+  }
+
+  lines.push('');
+  lines.push('EXPERIENCE');
+  if (Array.isArray(rData.experience) && rData.experience.length > 0) {
+    rData.experience.forEach(exp => {
+      lines.push(`${exp.role || 'Role'} - ${exp.company || 'Organization'} (${exp.period || exp.duration || ''})`);
+      if (Array.isArray(exp.details)) {
+        exp.details.forEach(d => lines.push(`- ${d}`));
+      } else if (exp.details) {
+        lines.push(`- ${exp.details}`);
+      }
+    });
+  } else if (isDemo) {
+    lines.push('Software Engineer Intern - FinTech Labs (May 2025 - Jul 2025)');
+    lines.push('- Developed responsive payment analytics dashboard in React & Tailwind CSS, reducing latency by 35%.');
+    lines.push('- Engineered Node.js REST endpoints integrated with PostgreSQL, handling 20,000+ daily mock transaction records.');
+    lines.push('- Wrote unit tests using Jest, achieving 88% test coverage.');
+  } else {
+    lines.push('(Add your internships or experience entries in Resume Builder)');
+  }
+
+  lines.push('');
+  lines.push('PROJECTS');
+  if (Array.isArray(rData.projects) && rData.projects.length > 0) {
+    rData.projects.forEach(proj => {
+      lines.push(`${proj.title || 'Project'} (Tech: ${proj.tech || proj.techStack || ''})`);
+      if (proj.description) lines.push(proj.description);
+    });
+  } else if (isDemo) {
+    lines.push('RecruitLoop — AI Placement Portal');
+    lines.push('Tech: React, Node.js, Tailwind CSS, Gemini API');
+    lines.push('End-to-end campus recruitment ecosystem with ATS resume evaluation and automated recruiter workflows.');
+    lines.push('');
+    lines.push('Distributed Task Queue Engine');
+    lines.push('Tech: Go, Redis, Docker, WebSockets');
+    lines.push('High-throughput async job runner with exponential backoff retries and live task status dashboards.');
+  } else {
+    lines.push('(Add your technical projects in Resume Builder)');
+  }
+
+  lines.push('');
+  lines.push('SKILLS');
+  const userSkills = rData.skills?.length ? rData.skills : (s.skills || []);
+  lines.push(userSkills.length ? userSkills.join(', ') : 'Data Structures, Algorithms, Problem Solving');
+
+  return lines.join('\n').trim();
+};
+
 export default function ResumeAnalyzer() {
-  const { student, setStudent, jobs, showToast } = useApp();
+  const { student, updateStudentProfile, setStudent, jobs, showToast } = useApp();
 
   // Selected job for target comparison
   const [selectedJobId, setSelectedJobId] = useState(jobs[0]?.id || '');
   
-  // Default to student's profile text or uploaded PDF text
-  const uploadedPdfText = student.resumeFile?.text || student.resumeData?.rawExtractedText;
-  const initialResumeText = uploadedPdfText && uploadedPdfText.length > 50
-    ? uploadedPdfText
-    : `
-${student.resumeData?.fullName || student.name}
-Email: ${student.email} | Phone: ${student.phone} | Bangalore, India
-LinkedIn: ${student.resumeData?.linkedin} | GitHub: ${student.resumeData?.github}
-
-SUMMARY
-${student.resumeData?.summary}
-
-EDUCATION
-B.Tech in Computer Science & Engineering - NIT (CGPA: 8.85 / 10) 2022 - 2026
-Class XII CBSE - 96.2%
-
-EXPERIENCE
-Software Engineer Intern - FinTech Labs (May 2025 - Jul 2025)
-- Developed responsive payment analytics dashboard in React & Tailwind CSS, reducing latency by 35%.
-- Engineered Node.js REST endpoints integrated with PostgreSQL, handling 20,000+ daily mock transaction records.
-- Wrote unit tests using Jest, achieving 88% test coverage.
-
-PROJECTS
-RecruitLoop — AI Placement Portal
-Tech: React, Node.js, Tailwind CSS, Gemini API
-End-to-end campus recruitment ecosystem with ATS resume evaluation and automated recruiter workflows.
-
-Distributed Task Queue Engine
-Tech: Go, Redis, Docker, WebSockets
-High-throughput async job runner with exponential backoff retries and live task status dashboards.
-
-SKILLS
-${student.skills?.join(', ')}
-  `.trim();
-
-  const [resumeText, setResumeText] = useState(initialResumeText);
+  const [resumeText, setResumeText] = useState(() => buildResumeText(student));
   const [targetJD, setTargetJD] = useState(jobs[0]?.description || '');
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
   const [hasCustomKey, setHasCustomKey] = useState(false);
+
+  useEffect(() => {
+    setResumeText(buildResumeText(student));
+  }, [student]);
 
   useEffect(() => {
     setHasCustomKey(!!localStorage.getItem('recruitloop_gemini_api_key'));
@@ -159,11 +219,14 @@ ${student.skills?.join(', ')}
       console.warn('Backend save fallback to client state:', e);
     } finally {
       setIsSaving(false);
-      setIsSaved(true);
-      setStudent(prev => ({
-        ...prev,
-        atsScore: analysisResult.score
-      }));
+      if (updateStudentProfile) {
+        await updateStudentProfile({ atsScore: analysisResult.score });
+      } else {
+        setStudent(prev => ({
+          ...prev,
+          atsScore: analysisResult.score
+        }));
+      }
       if (showToast) {
         showToast(`Verified ATS score of ${analysisResult.score}% synced to your Student Profile!`);
       }

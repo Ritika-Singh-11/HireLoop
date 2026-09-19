@@ -33,8 +33,12 @@ export default function JobBoard() {
 
   // Check if job is applied
   const appliedJobIds = useMemo(() => {
-    return new Set(applications.filter(a => a.studentId === student.id).map(a => a.jobId));
-  }, [applications, student.id]);
+    return new Set(applications.filter(a => 
+      (student?.id && a.studentId === student.id) ||
+      (a.studentEmail && student?.email && a.studentEmail.toLowerCase() === student.email.toLowerCase()) ||
+      (a.studentRoll && student?.rollNumber && a.studentRoll.toLowerCase() === student.rollNumber.toLowerCase())
+    ).map(a => a.jobId));
+  }, [applications, student]);
 
   // Smart branch normalization helper
   const matchesBranchSelection = (eligibleBranches = [], selected) => {

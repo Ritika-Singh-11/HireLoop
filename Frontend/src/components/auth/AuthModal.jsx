@@ -89,12 +89,12 @@ export default function AuthModal({ isOpen, onClose }) {
     e.preventDefault();
     setFormError('');
     setSubmitting(true);
-    const success = await login(loginEmail, loginPassword, activePortal);
+    const res = await login(loginEmail, loginPassword, activePortal);
     setSubmitting(false);
-    if (success) {
+    if (res && (res === true || res.success)) {
       onClose();
     } else {
-      setFormError(authError || 'Login failed. Please verify your credentials.');
+      setFormError(res?.error || authError || 'Login failed. Please verify your credentials.');
     }
   };
 
@@ -102,12 +102,12 @@ export default function AuthModal({ isOpen, onClose }) {
     e.preventDefault();
     setFormError('');
     setSubmitting(true);
-    const success = await registerStudent(studentForm);
+    const res = await registerStudent(studentForm);
     setSubmitting(false);
-    if (success) {
+    if (res && (res === true || res.success)) {
       onClose();
     } else {
-      setFormError('Registration failed. Please check the details or try another email.');
+      setFormError(res?.error || authError || 'Registration failed. Please check the details.');
     }
   };
 
@@ -115,12 +115,12 @@ export default function AuthModal({ isOpen, onClose }) {
     e.preventDefault();
     setFormError('');
     setSubmitting(true);
-    const success = await registerRecruiter(recruiterForm);
+    const res = await registerRecruiter(recruiterForm);
     setSubmitting(false);
-    if (success) {
+    if (res && (res === true || res.success)) {
       onClose();
     } else {
-      setFormError('Registration failed. Please check the details or try another email.');
+      setFormError(res?.error || authError || 'Registration failed. Please check the details.');
     }
   };
 
@@ -128,12 +128,12 @@ export default function AuthModal({ isOpen, onClose }) {
     e.preventDefault();
     setFormError('');
     setSubmitting(true);
-    const success = await registerAdmin(adminForm);
+    const res = await registerAdmin(adminForm);
     setSubmitting(false);
-    if (success) {
+    if (res && (res === true || res.success)) {
       onClose();
     } else {
-      setFormError(authError || 'Admin registration failed. Please verify your details and TPO security key.');
+      setFormError(res?.error || authError || 'Admin registration failed. Please verify your details and TPO security key.');
     }
   };
 

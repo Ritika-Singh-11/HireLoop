@@ -15,6 +15,8 @@ const ADMIN_WHITELIST = (process.env.ADMIN_EMAIL_WHITELIST || '')
 // collects (rollNumber, branch, cgpa, batch, skills for students; industry,
 // website for recruiters if you send them) instead of silently dropping them.
 export const register = async (req, res, next) => {
+  let createdUser = null;
+  let roleType = null;
   try {
     const {
       email, password, name, role,
@@ -23,6 +25,7 @@ export const register = async (req, res, next) => {
       // recruiter-specific
       companyName, industry, website,
     } = req.body;
+    roleType = role;
 
     if (!email || !password || !role) {
       return res.status(400).json({ message: 'email, password and role are required' });
@@ -45,6 +48,7 @@ export const register = async (req, res, next) => {
     }
 
     const user = await User.create({ email, password, name, role, provider: 'local' });
+    createdUser = user;
 
     if (role === 'student') {
       // `skills` may arrive as a real array (already split on the frontend)
@@ -68,6 +72,7 @@ export const register = async (req, res, next) => {
     }
 
     let extra = {};
+    let companyInfo = {};
     if (role === 'student') {
       extra.isPremium = true;
     }
@@ -112,6 +117,11 @@ export const register = async (req, res, next) => {
       refreshToken,
     });
   } catch (err) {
+    if (createdUser?._id) {
+      await User.deleteOne({ _id: createdUser._id }).catch(() => {});
+      if (roleType === 'student') await StudentProfile.deleteOne({ user: createdUser._id }).catch(() => {});
+      if (roleType === 'recruiter') await RecruiterProfile.deleteOne({ user: createdUser._id }).catch(() => {});
+    }
     next(err);
   }
 };

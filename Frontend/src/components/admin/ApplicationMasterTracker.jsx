@@ -25,7 +25,7 @@ export default function ApplicationMasterTracker() {
   const statuses = ['All', 'Applied', 'Shortlisted', 'Interview Scheduled', 'Offered', 'Rejected'];
 
   const filteredApps = applications.filter(app => {
-    const studentName = app.studentName || 'Aarav Sharma';
+    const studentName = app.studentName || 'Candidate';
     const matchesSearch = 
       studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -145,8 +145,8 @@ export default function ApplicationMasterTracker() {
                 </tr>
               ) : (
                 filteredApps.map(app => {
-                  const studentName = app.studentName || 'Aarav Sharma';
-                  const rollNo = app.studentRoll || '21BCSE104';
+                  const studentName = app.studentName || 'Candidate';
+                  const rollNo = app.studentRoll || 'N/A';
 
                   return (
                     <tr key={app.id} className="hover:bg-slate-50/60 transition-colors">

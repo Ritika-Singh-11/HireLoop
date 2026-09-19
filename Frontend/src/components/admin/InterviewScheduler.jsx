@@ -52,8 +52,8 @@ export default function InterviewScheduler() {
     .filter(a => a.status === 'Interview Scheduled' || a.interview)
     .map(a => ({
       appId: a.id,
-      candidate: a.studentName || 'Aarav Sharma',
-      roll: a.studentRoll || '21BCSE104',
+      candidate: a.studentName || 'Candidate',
+      roll: a.studentRoll || 'N/A',
       company: a.companyName,
       jobTitle: a.jobTitle,
       round: a.interview?.round || 'Technical Screening',
@@ -94,8 +94,8 @@ export default function InterviewScheduler() {
 
     try {
       const payload = {
-        candidate: candidateApp?.studentName || 'Aarav Sharma',
-        roll: candidateApp?.studentRoll || '21BCSE104',
+        candidate: candidateApp?.studentName || 'Candidate',
+        roll: candidateApp?.studentRoll || 'N/A',
         company: candidateApp?.companyName || 'Campus Recruiter',
         jobTitle: candidateApp?.jobTitle || 'Software Development Engineer',
         round: roundType,
@@ -290,7 +290,7 @@ export default function InterviewScheduler() {
                 >
                   {applications.map(app => (
                     <option key={app.id} value={app.id}>
-                      {app.studentName || 'Aarav Sharma'} ({app.studentRoll || '21BCSE104'}) — {app.companyName} ({app.jobTitle})
+                      {app.studentName || 'Candidate'} ({app.studentRoll || 'N/A'}) — {app.companyName} ({app.jobTitle})
                     </option>
                   ))}
                 </select>

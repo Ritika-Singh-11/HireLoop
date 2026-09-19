@@ -22,10 +22,32 @@ export default function RecruiterDashboard({ onNavigate }) {
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
 
-  const totalApps = applications.length;
-  const shortlisted = applications.filter(a => a.status === 'Shortlisted').length;
-  const interviews = applications.filter(a => a.status === 'Interview Scheduled').length;
-  const offers = applications.filter(a => a.status === 'Offer').length;
+  const recruiterCompany = (currentUser?.companyName || '').toLowerCase().trim();
+  const isDemoRecruiter = !currentUser?.companyName || currentUser?.email === 'neha.recruiter@razorpay.com';
+
+  const myJobs = React.useMemo(() => {
+    if (!recruiterCompany) return jobs;
+    return jobs.filter(j => 
+      (j.companyName && j.companyName.toLowerCase().trim() === recruiterCompany) ||
+      (j.recruiterId && j.recruiterId === currentUser?.id) ||
+      (isDemoRecruiter && (!j.companyName || j.companyName.toLowerCase() === 'razorpay'))
+    );
+  }, [jobs, recruiterCompany, currentUser, isDemoRecruiter]);
+
+  const myJobIds = React.useMemo(() => new Set(myJobs.map(j => String(j.id || j._id))), [myJobs]);
+
+  const companyApps = React.useMemo(() => {
+    if (!recruiterCompany && isDemoRecruiter) return applications;
+    return applications.filter(a => 
+      myJobIds.has(String(a.jobId)) ||
+      (recruiterCompany && a.companyName && a.companyName.toLowerCase().trim() === recruiterCompany)
+    );
+  }, [applications, myJobIds, recruiterCompany, isDemoRecruiter]);
+
+  const totalApps = companyApps.length;
+  const shortlisted = companyApps.filter(a => a.status === 'Shortlisted').length;
+  const interviews = companyApps.filter(a => a.status === 'Interview Scheduled').length;
+  const offers = companyApps.filter(a => a.status === 'Offer').length;
 
   return (
     <div className="space-y-6">
@@ -73,7 +95,7 @@ export default function RecruiterDashboard({ onNavigate }) {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{jobs.length}</span>
+            <span className="text-3xl font-extrabold text-slate-900">{myJobs.length}</span>
             <span className="text-xs text-slate-500">Live Roles</span>
           </div>
         </div>
@@ -134,9 +156,18 @@ export default function RecruiterDashboard({ onNavigate }) {
           </button>
         </div>
 
-        <div className="divide-y divide-slate-100">
-          {jobs.map(job => {
-            const jobApps = applications.filter(a => a.jobId === job.id);
+        {myJobs.length === 0 ? (
+          <div className="p-10 text-center bg-slate-50/50">
+            <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <h4 className="text-sm font-bold text-slate-800">No Campus Openings Posted Yet</h4>
+            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+              You haven&apos;t posted any positions for {currentUser?.companyName || 'your organization'} yet. Click &quot;Post New Campus Job&quot; above to create your first campus drive opening.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {myJobs.map(job => {
+              const jobApps = applications.filter(a => a.jobId === job.id);
             return (
               <div key={job.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-start gap-3.5">
@@ -203,6 +234,7 @@ export default function RecruiterDashboard({ onNavigate }) {
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Post Job Modal */}

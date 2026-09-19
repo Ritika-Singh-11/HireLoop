@@ -18,6 +18,61 @@ import {
 } from '../data/mockData';
 import { checkCandidateEligibility } from '../utils/eligibilityHelper';
 
+export const buildCleanStudentProfile = (user, formData = {}) => {
+  const skillsArray = Array.isArray(formData.skills)
+    ? formData.skills
+    : typeof formData.skills === 'string'
+      ? formData.skills.split(',').map(s => s.trim()).filter(Boolean)
+      : ['React', 'Node.js', 'JavaScript'];
+
+  const studentName = user?.name || formData.name || 'Candidate';
+  const studentEmail = (user?.email || formData.email || '').toLowerCase();
+  const rollNumber = formData.rollNumber || '';
+  const branch = formData.branch || 'Computer Science & Engineering';
+  const batch = formData.batch || '2026';
+  const cgpa = formData.cgpa !== undefined ? Number(formData.cgpa) : 8.0;
+
+  return {
+    id: user?.id || `stu-${Date.now()}`,
+    userId: user?.id,
+    name: studentName,
+    email: studentEmail,
+    phone: formData.phone || '',
+    location: formData.location || '',
+    rollNumber,
+    branch,
+    batch,
+    cgpa,
+    skills: skillsArray,
+    isPremium: true,
+    atsScore: null,
+    mockInterviewScore: null,
+    placedCompany: null,
+    backlogs: 0,
+    resumeUrl: null,
+    resumeData: {
+      fullName: studentName,
+      email: studentEmail,
+      phone: formData.phone || '',
+      location: formData.location || '',
+      linkedin: '',
+      github: '',
+      summary: '',
+      education: [
+        {
+          institution: 'Campus University',
+          degree: `B.Tech in ${branch}`,
+          year: `2022 - ${batch}`,
+          score: `CGPA: ${cgpa} / 10`
+        }
+      ],
+      experience: [],
+      projects: [],
+      skills: skillsArray
+    }
+  };
+};
+
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
@@ -58,10 +113,21 @@ export function AppProvider({ children }) {
 
   const currentUser = roleUsers[currentRole] || null;
 
-  // ================= MOCK / LOCAL STATE (unchanged for now) =================
+  // ================= MOCK / LOCAL STATE (User-isolated per account) =================
   const [student, setStudent] = useState(() => {
-    const saved = localStorage.getItem('recruitloop_student');
-    return saved ? JSON.parse(saved) : INITIAL_STUDENT;
+    try {
+      const savedUser = localStorage.getItem('recruitloop_role_users');
+      const parsedUsers = savedUser ? JSON.parse(savedUser) : null;
+      const studentEmail = parsedUsers?.student?.email?.toLowerCase();
+      if (studentEmail) {
+        const userSaved = localStorage.getItem(`recruitloop_student_${studentEmail}`);
+        if (userSaved) return JSON.parse(userSaved);
+      }
+      const saved = localStorage.getItem('recruitloop_student');
+      return saved ? JSON.parse(saved) : INITIAL_STUDENT;
+    } catch {
+      return INITIAL_STUDENT;
+    }
   });
 
   const [companies, setCompanies] = useState(() => {
@@ -469,6 +535,98 @@ export function AppProvider({ children }) {
     return newSubmission;
   };
 
+  const loadStudentProfileForUser = async (user, fallbackData = null) => {
+    if (!user || !user.email) return null;
+    const userEmail = user.email.toLowerCase();
+
+    // 1. Try to fetch real profile from Backend API
+    try {
+      const res = await api.getStudentProfile();
+      if (res?.profile) {
+        const p = res.profile;
+        const mapped = {
+          id: p.userId || user.id || p.id,
+          userId: p.userId || user.id,
+          name: p.name || user.name || 'Candidate',
+          email: p.email || user.email,
+          phone: p.phone || '',
+          location: p.location || '',
+          rollNumber: p.rollNumber || fallbackData?.rollNumber || '',
+          branch: p.branch || fallbackData?.branch || 'Computer Science & Engineering',
+          batch: p.batch || fallbackData?.batch || 2026,
+          cgpa: p.cgpa !== undefined ? Number(p.cgpa) : (fallbackData?.cgpa !== undefined ? Number(fallbackData.cgpa) : 8.0),
+          skills: p.skills && p.skills.length > 0 ? p.skills : (fallbackData?.skills || ['React', 'Node.js']),
+          linkedin: p.linkedin || '',
+          github: p.github || '',
+          summary: p.summary || '',
+          atsScore: p.atsScore || null,
+          mockInterviewScore: p.mockInterviewScore || null,
+          placedCompany: p.placedCompany || null,
+          backlogs: p.backlogs || 0,
+          isPremium: p.isPremium !== false,
+          resumeUrl: p.resumeUrl || null,
+          resumeData: p.resumeData || {
+            fullName: p.name || user.name,
+            email: p.email || user.email,
+            phone: p.phone || '',
+            location: p.location || '',
+            linkedin: p.linkedin || '',
+            github: p.github || '',
+            summary: p.summary || '',
+            education: [
+              {
+                institution: 'Campus University',
+                degree: `B.Tech in ${p.branch || 'Computer Science & Engineering'}`,
+                year: `2022 - ${p.batch || '2026'}`,
+                score: `CGPA: ${p.cgpa || 8.0} / 10`
+              }
+            ],
+            experience: [],
+            projects: [],
+            skills: p.skills || []
+          }
+        };
+        setStudent(mapped);
+        try {
+          localStorage.setItem(`recruitloop_student_${userEmail}`, JSON.stringify(mapped));
+          localStorage.setItem('recruitloop_student', JSON.stringify(mapped));
+        } catch {}
+        return mapped;
+      }
+    } catch (err) {
+      console.warn('Backend student profile fetch notice:', err.message || err);
+    }
+
+    // 2. Check user-specific localStorage
+    try {
+      const savedUserStudent = localStorage.getItem(`recruitloop_student_${userEmail}`);
+      if (savedUserStudent) {
+        const parsed = JSON.parse(savedUserStudent);
+        setStudent(parsed);
+        localStorage.setItem('recruitloop_student', JSON.stringify(parsed));
+        return parsed;
+      }
+    } catch {}
+
+    // 3. If it's the demo student Aarav Sharma, use INITIAL_STUDENT
+    if (userEmail === 'aarav.sharma@campus.edu') {
+      setStudent(INITIAL_STUDENT);
+      try {
+        localStorage.setItem('recruitloop_student', JSON.stringify(INITIAL_STUDENT));
+      } catch {}
+      return INITIAL_STUDENT;
+    }
+
+    // 4. Otherwise create a clean new student profile for this user
+    const newProfile = buildCleanStudentProfile(user, fallbackData || {});
+    setStudent(newProfile);
+    try {
+      localStorage.setItem(`recruitloop_student_${userEmail}`, JSON.stringify(newProfile));
+      localStorage.setItem('recruitloop_student', JSON.stringify(newProfile));
+    } catch {}
+    return newProfile;
+  };
+
   // ================= SESSION RESTORE (Independent per role) =================
   useEffect(() => {
     async function bootstrapAuth() {
@@ -488,8 +646,8 @@ export function AppProvider({ children }) {
           api.setRefreshToken(role, oauthRefreshToken);
           setRoleUsers(prev => ({ ...prev, [role]: me }));
           setCurrentRole(role);
-          if (role === 'student' && me?.name) {
-            setStudent(prev => ({ ...prev, id: me.id, name: me.name, email: me.email }));
+          if (role === 'student' && me) {
+            await loadStudentProfileForUser(me);
           }
           showToast(`Welcome, ${me?.name || me?.email}!`);
         } catch {
@@ -508,8 +666,8 @@ export function AppProvider({ children }) {
           const me = await api.getMe(r);
           if (me && me.role === r) {
             setRoleUsers(prev => ({ ...prev, [r]: me }));
-            if (r === 'student' && me.name) {
-              setStudent(prev => ({ ...prev, id: me.id, name: me.name, email: me.email }));
+            if (r === 'student' && me) {
+              await loadStudentProfileForUser(me);
             }
           }
         } catch (err) {
@@ -541,7 +699,7 @@ export function AppProvider({ children }) {
         const msg = `This account is registered as a ${data.user.role.toUpperCase()}. Please switch to the "${properPanelName}" panel to sign in.`;
         setAuthError(msg);
         showToast(msg, 'warning');
-        return false;
+        return { success: false, error: msg };
       }
 
       const role = data.user.role;
@@ -550,21 +708,15 @@ export function AppProvider({ children }) {
       setRoleUsers(prev => ({ ...prev, [role]: data.user }));
       setCurrentRole(role);
 
-      if (role === 'student' && data.user.name) {
-        setStudent(prev => ({ 
-          ...prev, 
-          id: data.user.id, 
-          name: data.user.name, 
-          email: data.user.email,
-          isPremium: true
-        }));
+      if (role === 'student' && data.user) {
+        await loadStudentProfileForUser(data.user);
       }
 
       showToast(`Welcome back, ${data.user.name || data.user.email}! (Signed into ${role.toUpperCase()} panel)`);
-      return true;
+      return { success: true };
     } catch (err) {
       // Graceful offline fallback for local development / demo testing
-      if (err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError') || err?.status === 500) {
+      if (err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError')) {
         const mockUser = target === 'admin' 
           ? { id: 'admin-1', name: 'Prof. S. K. Verma (Dean)', email: email || 'skverma@campus.edu', role: 'admin', department: 'Head of Placement Directorate' }
           : target === 'recruiter'
@@ -576,12 +728,13 @@ export function AppProvider({ children }) {
         setRoleUsers(prev => ({ ...prev, [target]: mockUser }));
         setCurrentRole(target);
         showToast(`Signed into ${target.toUpperCase()} panel!`);
-        return true;
+        return { success: true };
       }
 
-      setAuthError(err.data?.message || err.message || 'Login failed');
-      showToast(err.data?.message || 'Login failed. Check your email and password.', 'error');
-      return false;
+      const errorMsg = err.data?.message || err.message || 'Login failed';
+      setAuthError(errorMsg);
+      showToast(errorMsg, 'error');
+      return { success: false, error: errorMsg };
     }
   };
 
@@ -606,29 +759,24 @@ export function AppProvider({ children }) {
       api.setRefreshToken('student', data.refreshToken);
       setRoleUsers(prev => ({ ...prev, student: { ...data.user, isPremium: true } }));
       setCurrentRole('student');
-      setStudent(prev => ({
-        ...prev,
-        id: data.user.id,
-        name: data.user.name || formData.name,
-        email: data.user.email || formData.email,
-        rollNumber: formData.rollNumber || prev.rollNumber,
-        branch: formData.branch || prev.branch,
-        batch: formData.batch || prev.batch,
-        cgpa: formData.cgpa !== undefined ? Number(formData.cgpa) : prev.cgpa,
-        skills: Array.isArray(formData.skills)
-          ? formData.skills
-          : typeof formData.skills === 'string'
-            ? formData.skills.split(',').map(s => s.trim()).filter(Boolean)
-            : prev.skills,
-        isPremium: true,
-      }));
+
+      // Create a fresh, pristine student profile dedicated to this new user (no leftover data from other users!)
+      const newStudent = buildCleanStudentProfile(data.user, formData);
+      setStudent(newStudent);
+      const emailKey = (formData.email || data.user.email || '').toLowerCase();
+      try {
+        localStorage.setItem(`recruitloop_student_${emailKey}`, JSON.stringify(newStudent));
+        localStorage.setItem('recruitloop_student', JSON.stringify(newStudent));
+      } catch {}
+
       confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
       showToast(`Student account created! Welcome to HireLoop, ${data.user.name}. Pro tier activated!`);
-      return true;
+      return { success: true };
     } catch (err) {
-      setAuthError(err.data?.message || err.message || 'Registration failed');
-      showToast(err.data?.message || 'Registration failed', 'error');
-      return false;
+      const errorMsg = err.data?.message || err.message || 'Registration failed';
+      setAuthError(errorMsg);
+      showToast(errorMsg, 'error');
+      return { success: false, error: errorMsg };
     }
   };
 
@@ -676,11 +824,12 @@ export function AppProvider({ children }) {
       });
 
       showToast(`Company "${formData.companyName}" registered! Awaiting TPO verification.`);
-      return true;
+      return { success: true };
     } catch (err) {
-      setAuthError(err.data?.message || err.message || 'Registration failed');
-      showToast(err.data?.message || 'Registration failed', 'error');
-      return false;
+      const errorMsg = err.data?.message || err.message || 'Registration failed';
+      setAuthError(errorMsg);
+      showToast(errorMsg, 'error');
+      return { success: false, error: errorMsg };
     }
   };
 
@@ -702,9 +851,9 @@ export function AppProvider({ children }) {
       setCurrentRole('admin');
       confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
       showToast(`Admin account registered! Welcome to TPO Directorate, ${data.user.name}.`);
-      return true;
+      return { success: true };
     } catch (err) {
-      if (err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError') || err?.status === 500) {
+      if (err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError')) {
         const mockAdmin = {
           id: `admin-${Date.now()}`,
           name: formData.name || 'Placement Dean',
@@ -718,12 +867,13 @@ export function AppProvider({ children }) {
         setCurrentRole('admin');
         confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
         showToast(`TPO Administrator registered! Welcome, ${mockAdmin.name}.`);
-        return true;
+        return { success: true };
       }
 
-      setAuthError(err.data?.message || err.message || 'Admin registration failed');
-      showToast(err.data?.message || 'Admin registration failed', 'error');
-      return false;
+      const errorMsg = err.data?.message || err.message || 'Admin registration failed';
+      setAuthError(errorMsg);
+      showToast(errorMsg, 'error');
+      return { success: false, error: errorMsg };
     }
   };
 
@@ -756,6 +906,12 @@ export function AppProvider({ children }) {
     }
     api.clearTokens(role);
     setRoleUsers(prev => ({ ...prev, [role]: null }));
+    if (role === 'student') {
+      try {
+        localStorage.removeItem('recruitloop_student');
+      } catch {}
+      setStudent(INITIAL_STUDENT);
+    }
     showToast(`Logged out from ${role === 'student' ? 'Student' : role === 'recruiter' ? 'Recruiter' : 'Admin'} panel`);
   };
 
@@ -769,6 +925,12 @@ export function AppProvider({ children }) {
     } finally {
       api.clearTokens(role);
       setRoleUsers(prev => ({ ...prev, [role]: null }));
+      if (role === 'student') {
+        try {
+          localStorage.removeItem('recruitloop_student');
+        } catch {}
+        setStudent(INITIAL_STUDENT);
+      }
       showToast(`Logged out from all devices for ${role === 'student' ? 'Student' : role === 'recruiter' ? 'Recruiter' : 'Admin'} panel`);
     }
   };
@@ -941,7 +1103,16 @@ export function AppProvider({ children }) {
   };
 
   const updateStudentResume = (updatedResume) => {
-    setStudent(prev => ({ ...prev, resumeData: { ...prev.resumeData, ...updatedResume } }));
+    setStudent(prev => {
+      const next = { ...prev, resumeData: { ...prev.resumeData, ...updatedResume } };
+      try {
+        localStorage.setItem('recruitloop_student', JSON.stringify(next));
+        if (next.email) {
+          localStorage.setItem(`recruitloop_student_${next.email.toLowerCase()}`, JSON.stringify(next));
+        }
+      } catch {}
+      return next;
+    });
     showToast('Resume profile updated successfully!');
   };
 
@@ -965,6 +1136,9 @@ export function AppProvider({ children }) {
     setStudent(mergedStudent);
     try {
       localStorage.setItem('recruitloop_student', JSON.stringify(mergedStudent));
+      if (mergedStudent.email) {
+        localStorage.setItem(`recruitloop_student_${mergedStudent.email.toLowerCase()}`, JSON.stringify(mergedStudent));
+      }
     } catch {}
 
     // Update in studentsList so Admin / TPO panel reflects changes immediately

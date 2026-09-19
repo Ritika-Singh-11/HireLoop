@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   FileText, 
@@ -25,19 +25,38 @@ export default function ResumeBuilder() {
   const [activeTab, setActiveTab] = useState('editor'); // 'editor' | 'preview'
   const [template, setTemplate] = useState('modern'); // 'modern' | 'academic' | 'executive'
   
+  const isDemo = student?.email === 'aarav.sharma@campus.edu';
+
   const [resume, setResume] = useState(() => ({
-    fullName: student.resumeData?.fullName || student.name,
-    email: student.resumeData?.email || student.email,
-    phone: student.resumeData?.phone || student.phone,
-    location: student.resumeData?.location || 'Bangalore, India',
-    linkedin: student.resumeData?.linkedin || 'linkedin.com/in/aaravsharma',
-    github: student.resumeData?.github || 'github.com/aaravsharma',
+    fullName: student.resumeData?.fullName || student.name || '',
+    email: student.resumeData?.email || student.email || '',
+    phone: student.resumeData?.phone || student.phone || '',
+    location: student.resumeData?.location || (isDemo ? 'Bangalore, India' : ''),
+    linkedin: student.resumeData?.linkedin || (isDemo ? 'linkedin.com/in/aaravsharma' : ''),
+    github: student.resumeData?.github || (isDemo ? 'github.com/aaravsharma' : ''),
     summary: student.resumeData?.summary || '',
     education: student.resumeData?.education || [],
     experience: student.resumeData?.experience || [],
     projects: student.resumeData?.projects || [],
-    skills: student.resumeData?.skills || []
+    skills: student.resumeData?.skills || (student.skills || [])
   }));
+
+  useEffect(() => {
+    const isDemoAccount = student?.email === 'aarav.sharma@campus.edu';
+    setResume({
+      fullName: student.resumeData?.fullName || student.name || '',
+      email: student.resumeData?.email || student.email || '',
+      phone: student.resumeData?.phone || student.phone || '',
+      location: student.resumeData?.location || (isDemoAccount ? 'Bangalore, India' : ''),
+      linkedin: student.resumeData?.linkedin || (isDemoAccount ? 'linkedin.com/in/aaravsharma' : ''),
+      github: student.resumeData?.github || (isDemoAccount ? 'github.com/aaravsharma' : ''),
+      summary: student.resumeData?.summary || '',
+      education: student.resumeData?.education || [],
+      experience: student.resumeData?.experience || [],
+      projects: student.resumeData?.projects || [],
+      skills: student.resumeData?.skills || (student.skills || [])
+    });
+  }, [student]);
 
   const [newSkill, setNewSkill] = useState('');
 

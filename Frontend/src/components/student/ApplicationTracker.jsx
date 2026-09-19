@@ -93,14 +93,15 @@ export default function ApplicationTracker() {
     setSelectedOfferApp(prev => prev ? { ...prev, offerDeclined: true, offerAccepted: false } : null);
   };
 
+  const isDemoStudent = !student?.email || student?.email === 'aarav.sharma@campus.edu';
   const myApps = applications.filter(a => 
-    a.studentId === student.id || 
-    (a.studentEmail && student.email && a.studentEmail.toLowerCase() === student.email.toLowerCase()) ||
-    (a.studentRoll && student.rollNumber && a.studentRoll.toLowerCase() === student.rollNumber.toLowerCase()) ||
-    (!a.studentId && a.studentName === student.name)
+    (student?.id && a.studentId === student.id) || 
+    (a.studentEmail && student?.email && a.studentEmail.toLowerCase() === student.email.toLowerCase()) ||
+    (a.studentRoll && student?.rollNumber && a.studentRoll.toLowerCase() === student.rollNumber.toLowerCase()) ||
+    (isDemoStudent && (a.studentName === 'Aarav Sharma' || a.studentId === 'stu-101'))
   );
 
-  const displayApps = myApps.length > 0 ? myApps : applications;
+  const displayApps = myApps;
 
   const filteredApps = displayApps.filter(app => {
     if (filterStatus === 'All') return true;

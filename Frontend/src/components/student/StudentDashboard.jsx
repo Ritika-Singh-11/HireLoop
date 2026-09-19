@@ -61,13 +61,13 @@ export default function StudentDashboard({ onNavigate }) {
     };
   };
 
-  const matchedApps = applications.filter(a => 
-    a.studentId === student?.id || 
+  const isDemoStudent = !student?.email || student?.email === 'aarav.sharma@campus.edu';
+  const myApps = applications.filter(a => 
+    (student?.id && a.studentId === student.id) || 
     (a.studentEmail && student?.email && a.studentEmail.toLowerCase() === student.email.toLowerCase()) ||
     (a.studentRoll && student?.rollNumber && a.studentRoll.toLowerCase() === student.rollNumber.toLowerCase()) ||
-    (!a.studentId && a.studentName === student?.name)
+    (isDemoStudent && (a.studentName === 'Aarav Sharma' || a.studentId === 'stu-101'))
   );
-  const myApps = matchedApps.length > 0 ? matchedApps : applications;
 
   const shortlistedCount = myApps.filter(a => a.status === 'Shortlisted' || a.status === 'shortlisted').length;
   const interviewCount = myApps.filter(a => a.status === 'Interview Scheduled' || a.status === 'interview_scheduled' || a.interviewDetails || a.interview).length;
