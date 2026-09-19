@@ -18,9 +18,40 @@ import studentRoutes from './routes/student.route.js';
 import paymentRoutes from './routes/payment.route.js';
 const app = express();
 
+const allowedOrigins = [
+  'https://hire-loop-chi.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:5174',
+];
+
+if (process.env.CLIENT_URL) {
+  const envOrigins = process.env.CLIENT_URL.split(',').map((o) => o.trim().replace(/\/$/, ''));
+  envOrigins.forEach((o) => {
+    if (o && !allowedOrigins.includes(o)) {
+      allowedOrigins.push(o);
+    }
+  });
+}
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/$/, '');
+      try {
+        const url = new URL(origin);
+        if (allowedOrigins.includes(cleanOrigin) || /\.vercel\.app$/.test(url.hostname)) {
+          return callback(null, true);
+        }
+      } catch {
+        if (allowedOrigins.includes(cleanOrigin)) {
+          return callback(null, true);
+        }
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );

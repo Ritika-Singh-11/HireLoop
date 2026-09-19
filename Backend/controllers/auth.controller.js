@@ -184,7 +184,8 @@ export const oauthCallback = async (req, res, next) => {
     const user = req.user;
     const { accessToken, refreshToken } = await createSession(user, req);
 
-    const redirectUrl = new URL('/', process.env.CLIENT_URL);
+    const clientBase = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
+    const redirectUrl = new URL('/', clientBase);
     redirectUrl.searchParams.set('accessToken', accessToken);
     redirectUrl.searchParams.set('refreshToken', refreshToken);
     res.redirect(redirectUrl.toString());

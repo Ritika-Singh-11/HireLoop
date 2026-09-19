@@ -306,7 +306,7 @@ export const acceptOffer = async (req, res, next) => {
               <div><span>Verification Code:</span><span style="font-family: monospace;">${offer.offerCode}</span></div>
               <div><span>Date Signed:</span><span>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span></div>
             </div>
-            <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}" class="btn">Open HireLoop Student Portal</a>
+            <a href="${process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app'}" class="btn">Open HireLoop Student Portal</a>
           </div>
         </body>
         </html>
@@ -430,7 +430,7 @@ export const declineOffer = async (req, res, next) => {
             <div class="badge">Offer Declined</div>
             <h1>Offer Formally Declined</h1>
             <p>You have declined the placement offer from <strong>${offer.companyName}</strong>. The Placement Directorate and Recruiter have been notified.</p>
-            <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}" class="btn">Return to HireLoop Portal</a>
+            <a href="${process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app'}" class="btn">Return to HireLoop Portal</a>
           </div>
         </body>
         </html>
