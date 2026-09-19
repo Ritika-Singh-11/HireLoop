@@ -50,12 +50,25 @@ async function findOrCreateOAuthUser({ provider, providerId, email, name, avatar
   return user;
 }
 
+const getCallbackUrl = (envVar, defaultPath) => {
+  // If explicitly configured with a non-localhost URL, use it
+  if (envVar && !envVar.includes('localhost')) {
+    return envVar;
+  }
+  // If running in production or on Render, always use the deployed Render callback
+  if (process.env.NODE_ENV === 'production' || process.env.RENDER || process.env.RENDER_EXTERNAL_URL) {
+    return `https://hireloop-txmg.onrender.com/api/auth/${defaultPath}`;
+  }
+  // In local development, fall back to localhost
+  return envVar || `http://localhost:5000/api/auth/${defaultPath}`;
+};
+
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL || 'https://hireloop-txmg.onrender.com/api/auth/google/callback',
+      clientID: process.env.GOOGLE_CLIENT_ID || 'dummy-google-client-id',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'dummy-google-secret',
+      callbackURL: getCallbackUrl(process.env.GOOGLE_CALLBACK_URL, 'google/callback'),
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -77,9 +90,9 @@ passport.use(
 passport.use(
   new GitHubStrategy(
     {
-      clientID: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackURL: process.env.GITHUB_CALLBACK_URL || 'https://hireloop-txmg.onrender.com/api/auth/github/callback',
+      clientID: process.env.GITHUB_CLIENT_ID || 'dummy-github-client-id',
+      clientSecret: process.env.GITHUB_CLIENT_SECRET || 'dummy-github-secret',
+      callbackURL: getCallbackUrl(process.env.GITHUB_CALLBACK_URL, 'github/callback'),
     },
     async (accessToken, refreshToken, profile, done) => {
       try {

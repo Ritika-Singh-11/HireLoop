@@ -23,6 +23,8 @@ export default function AuthModal({ isOpen, onClose }) {
     registerStudent,
     registerRecruiter,
     registerAdmin,
+    loginAsDemoStudent,
+    loginAsDemoRecruiter,
     loginAsDemoAdmin,
     authModalTab,
     authModalTargetRole,
@@ -135,6 +137,16 @@ export default function AuthModal({ isOpen, onClose }) {
     } else {
       setFormError(res?.error || authError || 'Admin registration failed. Please verify your details and TPO security key.');
     }
+  };
+
+  const handleDemoStudentLogin = async () => {
+    await loginAsDemoStudent();
+    onClose();
+  };
+
+  const handleDemoRecruiterLogin = () => {
+    loginAsDemoRecruiter();
+    onClose();
   };
 
   const handleDemoAdminLogin = () => {
@@ -389,13 +401,15 @@ export default function AuthModal({ isOpen, onClose }) {
                   {!submitting && <ArrowRight className="w-3.5 h-3.5" />}
                 </button>
 
-                {isAdminPortal && (
-                  <div className="pt-2">
-                    <div className="relative flex py-2 items-center">
-                      <div className="grow border-t border-slate-200" />
-                      <span className="shrink mx-2 text-[10px] text-slate-400 uppercase font-bold">Fast Access</span>
-                      <div className="grow border-t border-slate-200" />
-                    </div>
+                {/* Fast Access 1-Click Demo Logins */}
+                <div className="pt-2">
+                  <div className="relative flex py-2 items-center">
+                    <div className="grow border-t border-slate-200" />
+                    <span className="shrink mx-2 text-[10px] text-slate-400 uppercase font-bold">Fast Access</span>
+                    <div className="grow border-t border-slate-200" />
+                  </div>
+
+                  {isAdminPortal && (
                     <button
                       type="button"
                       onClick={handleDemoAdminLogin}
@@ -404,8 +418,30 @@ export default function AuthModal({ isOpen, onClose }) {
                       <Sparkles className="w-4 h-4 text-purple-600" />
                       <span>1-Click Instant TPO Login (Dean / Super Admin)</span>
                     </button>
-                  </div>
-                )}
+                  )}
+
+                  {isStudentPortal && (
+                    <button
+                      type="button"
+                      onClick={handleDemoStudentLogin}
+                      className="w-full py-2.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#1E3A8A] border border-blue-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                    >
+                      <Sparkles className="w-4 h-4 text-[#2563EB]" />
+                      <span>1-Click Instant Student Login (Aarav Sharma)</span>
+                    </button>
+                  )}
+
+                  {isRecruiterPortal && (
+                    <button
+                      type="button"
+                      onClick={handleDemoRecruiterLogin}
+                      className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                    >
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span>1-Click Instant Recruiter Login (Neha Kapoor - Razorpay)</span>
+                    </button>
+                  )}
+                </div>
               </form>
 
               {/* Seamless toggle to Register */}

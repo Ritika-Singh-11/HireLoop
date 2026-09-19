@@ -25,8 +25,9 @@ router.get(
 );
 const getClientLoginUrl = () => {
   const raw = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
-  const base = raw.split(',')[0].trim().replace(/\/$/, '');
-  return `${base}/login`;
+  const urls = raw.split(',').map((o) => o.trim()).filter(Boolean);
+  const base = urls.find((o) => o.includes('vercel.app')) || urls[0] || 'https://hire-loop-chi.vercel.app';
+  return `${base.replace(/\/$/, '')}/?error=oauth_failed`;
 };
 
 router.get(

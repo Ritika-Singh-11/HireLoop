@@ -184,8 +184,10 @@ export const oauthCallback = async (req, res, next) => {
     const user = req.user;
     const { accessToken, refreshToken } = await createSession(user, req);
 
-    const clientBase = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
-    const redirectUrl = new URL('/', clientBase);
+    const rawClient = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
+    const clientUrls = rawClient.split(',').map((u) => u.trim()).filter(Boolean);
+    const clientBase = clientUrls.find((u) => u.includes('vercel.app')) || clientUrls[0] || 'https://hire-loop-chi.vercel.app';
+    const redirectUrl = new URL('/', clientBase.replace(/\/$/, '') + '/');
     redirectUrl.searchParams.set('accessToken', accessToken);
     redirectUrl.searchParams.set('refreshToken', refreshToken);
     res.redirect(redirectUrl.toString());

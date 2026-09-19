@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import StatCard from '../common/StatCard';
 import { 
   Briefcase, 
   Users, 
@@ -53,22 +54,22 @@ export default function RecruiterDashboard({ onNavigate }) {
     <div className="space-y-6">
       
       {/* Recruiter Welcome Header */}
-      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-white rounded-[14px] border border-[#E2E8F0] p-6 sm:p-7 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold mb-3 border border-emerald-500/30">
-              <Sparkles className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-[#1E3A8A] text-xs font-semibold mb-2.5 border border-blue-100">
+              <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
               <span>Campus Recruitment Console 2026</span>
               {currentUser?.companyName && (
-                <span className="ml-2 pl-2 border-l border-emerald-500/40 text-emerald-100 font-extrabold flex items-center gap-1">
+                <span className="ml-2 pl-2 border-l border-blue-200 text-[#1E3A8A] font-semibold flex items-center gap-1">
                   🏢 {currentUser.companyName}
                 </span>
               )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#0F172A] tracking-tight">
               Recruiter Talent Portal {currentUser?.companyName ? `• ${currentUser.companyName}` : ''}
             </h1>
-            <p className="mt-2 text-emerald-100/90 text-sm max-w-2xl leading-relaxed">
+            <p className="mt-1.5 text-[#64748B] text-sm max-w-2xl leading-relaxed">
               Manage university job postings, screen verified student profiles with ATS match analytics, and schedule interviews.
             </p>
           </div>
@@ -76,7 +77,7 @@ export default function RecruiterDashboard({ onNavigate }) {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsPostModalOpen(true)}
-              className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white font-semibold text-xs transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Post New Campus Job</span>
@@ -85,71 +86,49 @@ export default function RecruiterDashboard({ onNavigate }) {
         </div>
       </div>
 
-      {/* Metrics Row */}
+      {/* Metrics Row using StatCard */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase">Active Jobs</span>
-            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-              <Briefcase className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{myJobs.length}</span>
-            <span className="text-xs text-slate-500">Live Roles</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase">Total Applicants</span>
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{totalApps}</span>
-            <span className="text-xs text-blue-600 font-semibold">Verified Resumes</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase">Shortlisted</span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-              <CheckCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{shortlisted}</span>
-            <span className="text-xs text-amber-600 font-semibold">Under Review</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase">Interviews Set</span>
-            <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
-              <Calendar className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{interviews}</span>
-            <span className="text-xs text-purple-600 font-semibold">Calendar Slots</span>
-          </div>
-        </div>
+        <StatCard
+          label="Active Jobs"
+          value={myJobs.length}
+          subtext="Live campus roles"
+          icon={Briefcase}
+          color="blue"
+        />
+        <StatCard
+          label="Total Applicants"
+          value={totalApps}
+          subtext="Verified candidate profiles"
+          icon={Users}
+          color="indigo"
+          onClick={() => onNavigate('applicants')}
+        />
+        <StatCard
+          label="Shortlisted"
+          value={shortlisted}
+          subtext="Under active screening"
+          icon={CheckCircle}
+          color="amber"
+        />
+        <StatCard
+          label="Interviews Scheduled"
+          value={interviews}
+          subtext="Confirmed slots"
+          icon={Calendar}
+          color="purple"
+        />
       </div>
 
       {/* Posted Openings Summary */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div className="bg-white rounded-[14px] border border-[#E2E8F0] shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-[#E2E8F0] flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Your Posted Campus Openings</h3>
-            <p className="text-xs text-slate-500">Live positions visible to Batch 2026 students</p>
+            <h3 className="text-base font-semibold text-[#0F172A]">Your Posted Campus Openings</h3>
+            <p className="text-xs text-[#64748B]">Live positions visible to Batch 2026 students</p>
           </div>
           <button
             onClick={() => onNavigate('applicants')}
-            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+            className="text-xs font-semibold text-[#1E3A8A] hover:text-[#1D4ED8] flex items-center gap-1 cursor-pointer"
           >
             <span>Manage All Candidates</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -159,36 +138,36 @@ export default function RecruiterDashboard({ onNavigate }) {
         {myJobs.length === 0 ? (
           <div className="p-10 text-center bg-slate-50/50">
             <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h4 className="text-sm font-bold text-slate-800">No Campus Openings Posted Yet</h4>
-            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+            <h4 className="text-sm font-semibold text-[#0F172A]">No Campus Openings Posted Yet</h4>
+            <p className="text-xs text-[#64748B] mt-1 max-w-md mx-auto">
               You haven&apos;t posted any positions for {currentUser?.companyName || 'your organization'} yet. Click &quot;Post New Campus Job&quot; above to create your first campus drive opening.
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-[#E2E8F0]">
             {myJobs.map(job => {
               const jobApps = applications.filter(a => a.jobId === job.id);
             return (
               <div key={job.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-start gap-3.5">
-                  <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xl shrink-0">
+                  <div className="w-11 h-11 rounded-lg bg-slate-50 border border-[#E2E8F0] flex items-center justify-center text-xl shrink-0">
                     {job.companyLogo || '🏢'}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-slate-900 text-sm">{job.title}</h4>
+                      <h4 className="font-semibold text-[#0F172A] text-sm">{job.title}</h4>
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
                         {job.salaryDisplay}
                       </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500">
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-[#64748B]">
                       <span>{job.department}</span>
                       <span>•</span>
-                      <span className="font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                      <span className="font-medium text-[#1E3A8A] bg-blue-50 px-2 py-0.5 rounded">
                         Min CGPA: {job.minCgpa}
                       </span>
                       <span>•</span>
-                      <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                      <span className="font-medium text-[#0F172A] bg-slate-100 px-2 py-0.5 rounded">
                         Max Backlogs: {job.maxBacklogs !== undefined ? job.maxBacklogs : 0}
                       </span>
                       <span>•</span>
@@ -197,8 +176,8 @@ export default function RecruiterDashboard({ onNavigate }) {
                       <span>Deadline: {job.deadline}</span>
                     </div>
                     {job.eligibleBranches && (
-                      <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                        <GraduationCap className="w-3 h-3 text-slate-400" />
+                      <div className="text-[11px] text-[#64748B] mt-1 flex items-center gap-1">
+                        <GraduationCap className="w-3 h-3 text-[#64748B]" />
                         <span>Branches: {Array.isArray(job.eligibleBranches) ? job.eligibleBranches.join(', ') : job.eligibleBranches}</span>
                       </div>
                     )}
@@ -207,8 +186,8 @@ export default function RecruiterDashboard({ onNavigate }) {
 
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className="text-sm font-extrabold text-slate-900">{jobApps.length} Applicants</div>
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-sm font-semibold text-[#0F172A]">{jobApps.length} Applicants</div>
+                    <div className="text-[11px] text-[#64748B]">
                       {jobApps.filter(a => a.status === 'Shortlisted').length} shortlisted
                     </div>
                   </div>
@@ -216,16 +195,16 @@ export default function RecruiterDashboard({ onNavigate }) {
                   <button
                     type="button"
                     onClick={() => setEditingJob(job)}
-                    className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-all border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-[#0F172A] text-xs font-semibold transition-colors border border-[#CBD5E1] flex items-center gap-1.5 cursor-pointer shadow-xs"
                     title="Customize Min CGPA, Backlogs, Eligible Branches & Package"
                   >
-                    <Sliders className="w-3.5 h-3.5" />
+                    <Sliders className="w-3.5 h-3.5 text-[#1E3A8A]" />
                     <span>Edit Eligibility</span>
                   </button>
 
                   <button
                     onClick={() => onNavigate('applicants')}
-                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white text-xs font-semibold transition-colors cursor-pointer shadow-xs"
                   >
                     View Applicants
                   </button>

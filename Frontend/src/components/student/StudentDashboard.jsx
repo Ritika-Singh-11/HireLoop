@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import LiveInterviewRoomModal from '../common/LiveInterviewRoomModal';
 import OfferLetterModal from '../common/OfferLetterModal';
 import TestSandboxModal from './TestSandboxModal';
+import StatCard from '../common/StatCard';
 import { 
   Briefcase, 
   Send, 
@@ -88,100 +89,72 @@ export default function StudentDashboard({ onNavigate }) {
   return (
     <div className="space-y-6">
       
-      {/* Student Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 text-white p-6 sm:p-8 shadow-xl">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      {/* Enterprise Student Welcome Header */}
+      <div className="bg-white rounded-[14px] border border-[#E2E8F0] p-6 sm:p-7 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-indigo-200 text-xs font-semibold mb-3 border border-white/15">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Placement Drive 2026 Active</span>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-blue-50 text-[#1E3A8A] text-xs font-semibold mb-2.5 border border-blue-100">
+              <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+              <span>Campus Placement Season 2026</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Welcome back, {student.name}!
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#0F172A] tracking-tight">
+              Welcome back, {student.name}
             </h1>
-            <p className="mt-2 text-indigo-100/90 text-sm max-w-2xl leading-relaxed">
-              {student.branch} • Roll: <span className="font-mono text-white">{student.rollNumber}</span> • CGPA: <span className="font-bold text-amber-300">{student.cgpa}</span> / 10.0
+            <p className="mt-1.5 text-[#64748B] text-sm leading-relaxed">
+              {student.branch} &bull; Roll: <span className="font-mono text-[#0F172A] font-medium">{student.rollNumber}</span> &bull; CGPA: <span className="font-semibold text-[#0F172A]">{student.cgpa}</span> / 10.0
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => onNavigate('resume-analyzer')}
-              className="px-4 py-2.5 rounded-xl bg-white text-indigo-950 font-bold text-xs hover:bg-indigo-50 transition-all shadow-md flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] font-semibold text-xs hover:bg-slate-50 transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
             >
-              <BrainCircuit className="w-4 h-4 text-indigo-600" />
+              <BrainCircuit className="w-4 h-4 text-[#1E3A8A]" />
               <span>ATS Resume Check</span>
             </button>
             <button
               onClick={() => onNavigate('mock-interview')}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 text-white font-bold text-xs border border-indigo-400/30 transition-all flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white font-semibold text-xs transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
+              <Sparkles className="w-4 h-4 text-blue-200" />
               <span>AI Mock Interview</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Metrics Row */}
+      {/* Metrics Row using StatCard */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Applied</span>
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <Send className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{myApps.length}</span>
-            <span className="text-xs text-slate-500">Drives</span>
-          </div>
-        </div>
-
-        <div 
+        <StatCard
+          label="Applications"
+          value={myApps.length}
+          subtext="Submitted drives"
+          icon={Send}
+          color="blue"
+        />
+        <StatCard
+          label="Shortlisted"
+          value={shortlistedCount}
+          subtext="Active assessment rounds"
+          icon={CheckCircle}
+          color="amber"
           onClick={() => onNavigate('assessments')}
-          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-amber-400 hover:shadow-md transition-all"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-amber-700">Shortlisted</span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
-              <CheckCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{shortlistedCount}</span>
-            <span className="text-xs text-amber-600 font-semibold flex items-center gap-0.5">
-              Active Round <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Interviews</span>
-            <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
-              <Calendar className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{interviewCount}</span>
-            <span className="text-xs text-purple-600 font-semibold">Scheduled</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Offers Received</span>
-            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-              <Trophy className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-emerald-600">{offerCount}</span>
-            <span className="text-xs text-emerald-600 font-semibold">Congratulations!</span>
-          </div>
-        </div>
+        />
+        <StatCard
+          label="Interviews"
+          value={interviewCount}
+          subtext="Scheduled rounds"
+          icon={Calendar}
+          color="indigo"
+        />
+        <StatCard
+          label="Offers Received"
+          value={offerCount}
+          subtext={offerCount > 0 ? "Placement confirmed" : "In active consideration"}
+          icon={Trophy}
+          color="emerald"
+        />
       </div>
 
       {/* Action alerts: Interview, OA & Offer spotlight */}
@@ -194,27 +167,26 @@ export default function StudentDashboard({ onNavigate }) {
             ) || assessments?.[0];
 
             return (
-              <div className="bg-gradient-to-br from-amber-50 via-orange-50/50 to-amber-100/50 rounded-2xl border border-amber-200 p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200/30 rounded-full blur-xl pointer-events-none" />
+              <div className="bg-white rounded-[14px] border border-amber-200 p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-amber-800 text-xs font-bold uppercase tracking-wider mb-2">
+                  <div className="flex items-center gap-2 text-amber-800 text-xs font-semibold uppercase tracking-wider mb-2">
                     <Code2 className="w-4 h-4 text-amber-600" />
                     <span>Round 2: Online Assessment (OA)</span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900">
+                  <h3 className="text-base font-semibold text-[#0F172A]">
                     {activeOaApp.companyName} — {activeOaApp.jobTitle}
                   </h3>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                  <p className="text-xs text-[#64748B] mt-1 font-normal">
                     Shortlisted for Technical Screening • Anti-Cheat Proctored Sandbox
                   </p>
                 </div>
 
-                <div className="mt-4 p-3 bg-white/90 backdrop-blur-xs rounded-xl border border-amber-200 flex items-center justify-between text-xs">
+                <div className="mt-4 p-3 bg-amber-50/60 rounded-lg border border-amber-200/80 flex items-center justify-between text-xs">
                   <div>
-                    <div className="font-semibold text-slate-900 truncate max-w-[160px]">
+                    <div className="font-semibold text-[#0F172A] truncate max-w-[160px]">
                       {matchedAssessment?.title || 'Technical DSA Assessment'}
                     </div>
-                    <div className="text-slate-500 text-[11px]">
+                    <div className="text-[#64748B] text-[11px]">
                       {matchedAssessment?.duration || '60 mins'} • Proctored
                     </div>
                   </div>
@@ -227,7 +199,7 @@ export default function StudentDashboard({ onNavigate }) {
                         onNavigate('assessments');
                       }
                     }}
-                    className="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
                   >
                     <Code2 className="w-3.5 h-3.5" />
                     <span>Start Test</span>
@@ -240,36 +212,35 @@ export default function StudentDashboard({ onNavigate }) {
           {upcomingInterview && (() => {
             const interview = upcomingInterview.interviewDetails || upcomingInterview.interview || {};
             return (
-              <div className="bg-white rounded-2xl border border-indigo-100 p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-xl pointer-events-none" />
+              <div className="bg-white rounded-[14px] border border-blue-200 p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-2">
+                  <div className="flex items-center gap-2 text-[#1E3A8A] text-xs font-semibold uppercase tracking-wider mb-2">
                     <Clock className="w-4 h-4" />
                     <span>Upcoming Interview</span>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900">
+                  <h3 className="text-base font-semibold text-[#0F172A]">
                     {upcomingInterview.companyName} — {upcomingInterview.jobTitle}
                   </h3>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                  <p className="text-xs text-[#64748B] mt-1 font-normal">
                     {interview.round || 'Technical Interview Round'}
                   </p>
                 </div>
-                <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
+                <div className="mt-4 p-3 bg-blue-50/50 rounded-lg border border-blue-100 flex items-center justify-between text-xs">
                   <div>
-                    <div className="font-semibold text-slate-900">
+                    <div className="font-semibold text-[#0F172A]">
                       {interview.date || 'Scheduled'} at {interview.time || 'TBD'}
                     </div>
-                    <div className="text-slate-500 text-[11px]">
+                    <div className="text-[#64748B] text-[11px]">
                       Interviewer: {interview.interviewer || 'Campus Hiring Panel'}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setJoiningInterview(upcomingInterview)}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-[#1E3A8A] text-white font-semibold hover:bg-[#1D4ED8] transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
-                    <Video className="w-3.5 h-3.5 text-emerald-300" />
-                    <span>Join Live Room</span>
+                    <Video className="w-3.5 h-3.5 text-blue-200" />
+                    <span>Join Room</span>
                   </button>
                 </div>
               </div>
@@ -280,57 +251,57 @@ export default function StudentDashboard({ onNavigate }) {
             const offerDetails = activeOffer.offerDetails || activeOffer.offer || {};
             const pkgDisplay = offerDetails.package || (offerDetails.totalLpa ? `₹${offerDetails.totalLpa} LPA` : '₹18.5 LPA');
             return (
-              <div className={`rounded-2xl border p-6 shadow-xs relative transition-all flex flex-col justify-between ${
+              <div className={`rounded-[14px] border p-6 shadow-xs relative transition-all flex flex-col justify-between ${
                 activeOffer.offerAccepted
-                  ? 'bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-100/60 border-emerald-300'
+                  ? 'bg-white border-emerald-300'
                   : activeOffer.offerDeclined
                   ? 'bg-slate-50 border-slate-200'
-                  : 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200'
+                  : 'bg-white border-emerald-200'
               }`}>
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider mb-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider mb-2">
                     <Trophy className={`w-4 h-4 ${activeOffer.offerDeclined ? 'text-slate-500' : 'text-emerald-700'}`} />
                     <span className={activeOffer.offerDeclined ? 'text-slate-600' : 'text-emerald-700'}>
                       {activeOffer.offerAccepted
-                        ? '🎉 Placement Offer Formally Accepted'
+                        ? 'Placement Offer Accepted'
                         : activeOffer.offerDeclined
                         ? 'Placement Offer Declined'
-                        : 'Active Placement Offer (Action Required)'}
+                        : 'Active Placement Offer'}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between">
-                    <h3 className="text-lg font-bold text-slate-900">
+                    <h3 className="text-base font-semibold text-[#0F172A]">
                       {activeOffer.companyName}
                     </h3>
-                    <span className={`text-2xl font-black ${activeOffer.offerDeclined ? 'text-slate-400 line-through' : 'text-emerald-600'}`}>
+                    <span className={`text-xl font-bold ${activeOffer.offerDeclined ? 'text-slate-400 line-through' : 'text-emerald-600'}`}>
                       {pkgDisplay}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-700 mt-1 font-medium">
+                  <p className="text-xs text-[#64748B] mt-1 font-normal">
                     Role: {offerDetails.designation || activeOffer.jobTitle || 'Software Engineer'} • Location: {offerDetails.location || 'Bangalore, India'}
                   </p>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center justify-between pt-3 border-t border-slate-200/60 text-xs gap-2">
-                  <span className="text-slate-500">
+                <div className="mt-4 flex flex-wrap items-center justify-between pt-3 border-t border-[#E2E8F0] text-xs gap-2">
+                  <span className="text-[#64748B]">
                     {activeOffer.offerAccepted
-                      ? 'Status: Official contract confirmed with TPO Directorate'
+                      ? 'Status: Confirmed with TPO Directorate'
                       : activeOffer.offerDeclined
                       ? 'Status: Candidate opted out'
-                      : `Accept before: ${offerDetails.validTill || 'Soon'}`}
+                      : `Valid till: ${offerDetails.validTill || 'Soon'}`}
                   </span>
                   <div className="flex items-center gap-2">
                     <button 
                       type="button"
                       onClick={() => setSelectedOfferApp(activeOffer)}
-                      className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                      className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1 cursor-pointer transition-colors ${
                         activeOffer.offerAccepted 
                           ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
                           : activeOffer.offerDeclined 
-                          ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' 
-                          : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
+                          ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' 
+                          : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
                       }`}
                     >
-                      <span>{activeOffer.offerAccepted ? 'View Signed Offer' : activeOffer.offerDeclined ? 'View Offer' : 'Review & Sign Offer'}</span>
+                      <span>{activeOffer.offerAccepted ? 'View Signed Offer' : activeOffer.offerDeclined ? 'View Offer' : 'Review & Sign'}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -342,38 +313,38 @@ export default function StudentDashboard({ onNavigate }) {
       )}
 
       {/* Pinned College Announcements */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+      <div className="bg-white rounded-[14px] border border-[#E2E8F0] p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-red-50 text-red-600">
               <AlertCircle className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-slate-900 text-base">
+            <h3 className="font-semibold text-[#0F172A] text-base">
               Placement Cell Official Notices
             </h3>
           </div>
-          <span className="text-xs text-slate-500">Updated today</span>
+          <span className="text-xs text-[#64748B]">Updated today</span>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-[#E2E8F0]">
           {announcements.slice(0, 3).map((ann) => (
             <div key={ann.id} className="py-3.5 first:pt-0 last:pb-0">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900 text-sm hover:text-indigo-600 transition-colors">
+                    <span className="font-semibold text-[#0F172A] text-sm hover:text-[#1E3A8A] transition-colors">
                       {ann.title}
                     </span>
                     {ann.pinned && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
                         {ann.badge || 'Urgent'}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-[#64748B] mt-1 line-clamp-2 leading-relaxed">
                     {ann.content}
                   </p>
-                  <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-2">
+                  <div className="flex items-center gap-3 text-[11px] text-[#64748B] mt-2">
                     <span>{ann.author}</span>
                     <span>•</span>
                     <span>{ann.date}</span>
@@ -389,60 +360,60 @@ export default function StudentDashboard({ onNavigate }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           onClick={() => onNavigate('jobs')}
-          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-indigo-400 hover:shadow-md transition-all"
+          className="group cursor-pointer bg-white p-5 rounded-[14px] border border-[#E2E8F0] shadow-xs hover:border-[#1E3A8A] hover:shadow-sm transition-all"
         >
-          <div className="p-3 w-fit rounded-xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+          <div className="p-2.5 w-fit rounded-lg bg-blue-50 text-[#1E3A8A] group-hover:bg-[#1E3A8A] group-hover:text-white transition-colors">
             <Briefcase className="w-5 h-5" />
           </div>
-          <h4 className="font-bold text-slate-900 mt-4 text-sm group-hover:text-indigo-600 transition-colors">
+          <h4 className="font-semibold text-[#0F172A] mt-3.5 text-sm group-hover:text-[#1E3A8A] transition-colors">
             Explore Open Drives
           </h4>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[#64748B] mt-1">
             Browse {jobs.length} campus openings with AI match scores & 1-click apply.
           </p>
         </div>
 
         <div
           onClick={() => onNavigate('assessments')}
-          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-amber-400 hover:shadow-md transition-all"
+          className="group cursor-pointer bg-white p-5 rounded-[14px] border border-[#E2E8F0] shadow-xs hover:border-amber-400 hover:shadow-sm transition-all"
         >
-          <div className="p-3 w-fit rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+          <div className="p-2.5 w-fit rounded-lg bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
             <Code2 className="w-5 h-5" />
           </div>
-          <h4 className="font-bold text-slate-900 mt-4 text-sm group-hover:text-amber-700 transition-colors">
+          <h4 className="font-semibold text-[#0F172A] mt-3.5 text-sm group-hover:text-amber-700 transition-colors">
             Online Assessments (OA)
           </h4>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[#64748B] mt-1">
             Proctored screening tests with real-time code editor & Aptitude MCQs.
           </p>
         </div>
 
         <div
           onClick={() => onNavigate('resume-builder')}
-          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-purple-400 hover:shadow-md transition-all"
+          className="group cursor-pointer bg-white p-5 rounded-[14px] border border-[#E2E8F0] shadow-xs hover:border-indigo-400 hover:shadow-sm transition-all"
         >
-          <div className="p-3 w-fit rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+          <div className="p-2.5 w-fit rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
             <FileText className="w-5 h-5" />
           </div>
-          <h4 className="font-bold text-slate-900 mt-4 text-sm group-hover:text-purple-600 transition-colors">
+          <h4 className="font-semibold text-[#0F172A] mt-3.5 text-sm group-hover:text-indigo-600 transition-colors">
             Resume Builder & PDF
           </h4>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[#64748B] mt-1">
             Select modern campus templates and export your verified ATS resume.
           </p>
         </div>
 
         <div
           onClick={() => onNavigate('mock-interview')}
-          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-emerald-400 hover:shadow-md transition-all"
+          className="group cursor-pointer bg-white p-5 rounded-[14px] border border-[#E2E8F0] shadow-xs hover:border-emerald-400 hover:shadow-sm transition-all"
         >
-          <div className="p-3 w-fit rounded-xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+          <div className="p-2.5 w-fit rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
             <BrainCircuit className="w-5 h-5" />
           </div>
-          <h4 className="font-bold text-slate-900 mt-4 text-sm group-hover:text-emerald-600 transition-colors">
+          <h4 className="font-semibold text-[#0F172A] mt-3.5 text-sm group-hover:text-emerald-600 transition-colors">
             AI Mock Interview
           </h4>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[#64748B] mt-1">
             Practice role-specific technical questions with speech & AI scorecards.
           </p>
         </div>
