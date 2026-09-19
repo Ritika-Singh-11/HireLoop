@@ -1,7 +1,7 @@
 // API Client Service for connecting React to the Express/MongoDB MERN backend.
 // REWRITTEN to match the actual backend routes from Phase 1/2, and to handle
 // access/refresh tokens properly instead of a single flat localStorage token.
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://hireloop-txmg.onrender.com/api';
 
 // ---------- Role-scoped Token storage ----------
 // Each role ('student', 'recruiter', 'admin') has its own independent session
