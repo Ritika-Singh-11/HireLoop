@@ -191,10 +191,12 @@ export const api = {
   // requires actually navigating the browser away to their real login page,
   // which an AJAX request can't do.
   startGoogleLogin() {
-    window.location.href = `${API_BASE}/auth/google`;
+    const returnUrl = window.location.origin;
+    window.location.href = `${API_BASE}/auth/google?returnTo=${encodeURIComponent(returnUrl)}`;
   },
   startGithubLogin() {
-    window.location.href = `${API_BASE}/auth/github`;
+    const returnUrl = window.location.origin;
+    window.location.href = `${API_BASE}/auth/github?returnTo=${encodeURIComponent(returnUrl)}`;
   },
 
   // ---------- Student Profile ----------

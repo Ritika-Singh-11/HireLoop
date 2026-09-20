@@ -21,12 +21,38 @@ router.post('/login', authLimiter, ctrl.login);
 // ---------- Google OAuth ----------
 router.get(
   '/google',
-  passport.authenticate('google', { scope: ['profile', 'email'], session: false })
+  (req, res, next) => {
+    const returnTo = req.query.returnTo || req.headers.referer;
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      session: false,
+      state: returnTo ? Buffer.from(returnTo).toString('base64') : undefined,
+    })(req, res, next);
+  }
 );
-const getClientLoginUrl = () => {
-  const raw = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
-  const urls = raw.split(',').map((o) => o.trim()).filter(Boolean);
-  const base = urls.find((o) => o.includes('vercel.app')) || urls[0] || 'https://hire-loop-chi.vercel.app';
+const getClientLoginUrl = (req) => {
+  let base = null;
+  if (req?.query?.state) {
+    try {
+      const decoded = Buffer.from(req.query.state, 'base64').toString('utf8');
+      const origin = new URL(decoded).origin;
+      if (origin.endsWith('.vercel.app') || origin.includes('localhost')) {
+        base = origin;
+      }
+    } catch {
+      // fallback
+    }
+  }
+  if (!base) {
+    const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER || process.env.RENDER_EXTERNAL_URL;
+    const raw = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
+    const urls = raw.split(',').map((o) => o.trim()).filter(Boolean);
+    if (isProd) {
+      base = urls.find((u) => !u.includes('localhost')) || 'https://hire-loop-chi.vercel.app';
+    } else {
+      base = urls.find((u) => u.includes('localhost')) || urls[0] || 'http://localhost:5173';
+    }
+  }
   return `${base.replace(/\/$/, '')}/?error=oauth_failed`;
 };
 
@@ -35,7 +61,7 @@ router.get(
   (req, res, next) => {
     passport.authenticate('google', {
       session: false,
-      failureRedirect: getClientLoginUrl(),
+      failureRedirect: getClientLoginUrl(req),
     })(req, res, next);
   },
   ctrl.oauthCallback
@@ -44,14 +70,21 @@ router.get(
 // ---------- GitHub OAuth ----------
 router.get(
   '/github',
-  passport.authenticate('github', { scope: ['user:email'], session: false })
+  (req, res, next) => {
+    const returnTo = req.query.returnTo || req.headers.referer;
+    passport.authenticate('github', {
+      scope: ['user:email'],
+      session: false,
+      state: returnTo ? Buffer.from(returnTo).toString('base64') : undefined,
+    })(req, res, next);
+  }
 );
 router.get(
   '/github/callback',
   (req, res, next) => {
     passport.authenticate('github', {
       session: false,
-      failureRedirect: getClientLoginUrl(),
+      failureRedirect: getClientLoginUrl(req),
     })(req, res, next);
   },
   ctrl.oauthCallback

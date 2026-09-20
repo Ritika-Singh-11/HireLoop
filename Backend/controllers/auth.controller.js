@@ -184,9 +184,41 @@ export const oauthCallback = async (req, res, next) => {
     const user = req.user;
     const { accessToken, refreshToken } = await createSession(user, req);
 
-    const rawClient = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
-    const clientUrls = rawClient.split(',').map((u) => u.trim()).filter(Boolean);
-    const clientBase = clientUrls.find((u) => u.includes('vercel.app')) || clientUrls[0] || 'https://hire-loop-chi.vercel.app';
+    let clientBase = null;
+
+    // 1. Check state parameter passed from the initiating client
+    if (req.query.state) {
+      try {
+        const decoded = Buffer.from(req.query.state, 'base64').toString('utf8');
+        const parsedUrl = new URL(decoded);
+        const origin = parsedUrl.origin;
+        if (
+          origin === 'https://hire-loop-chi.vercel.app' ||
+          origin.endsWith('.vercel.app') ||
+          origin.includes('localhost') ||
+          (process.env.CLIENT_URL && process.env.CLIENT_URL.includes(origin))
+        ) {
+          clientBase = origin;
+        }
+      } catch {
+        // Ignore invalid state
+      }
+    }
+
+    // 2. Fallback to configured CLIENT_URL
+    if (!clientBase) {
+      const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER || process.env.RENDER_EXTERNAL_URL;
+      const rawClient = process.env.CLIENT_URL || 'https://hire-loop-chi.vercel.app';
+      const clientUrls = rawClient.split(',').map((u) => u.trim()).filter(Boolean);
+
+      if (isProd) {
+        // In production/Render, NEVER redirect to localhost
+        clientBase = clientUrls.find((u) => !u.includes('localhost')) || 'https://hire-loop-chi.vercel.app';
+      } else {
+        clientBase = clientUrls.find((u) => u.includes('localhost')) || clientUrls[0] || 'http://localhost:5173';
+      }
+    }
+
     const redirectUrl = new URL('/', clientBase.replace(/\/$/, '') + '/');
     redirectUrl.searchParams.set('accessToken', accessToken);
     redirectUrl.searchParams.set('refreshToken', refreshToken);

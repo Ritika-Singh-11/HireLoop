@@ -642,14 +642,16 @@ export function AppProvider({ children }) {
         window.history.replaceState({}, '', window.location.pathname);
       }
 
-      if (oauthAccessToken && oauthRefreshToken) {
+      if (oauthAccessToken) {
         window.history.replaceState({}, '', window.location.pathname);
         try {
           api.setAccessToken('student', oauthAccessToken);
           const me = await api.getMe('student');
           const role = me?.role || 'student';
           api.setAccessToken(role, oauthAccessToken);
-          api.setRefreshToken(role, oauthRefreshToken);
+          if (oauthRefreshToken) {
+            api.setRefreshToken(role, oauthRefreshToken);
+          }
           setRoleUsers(prev => ({ ...prev, [role]: me }));
           setCurrentRole(role);
           if (role === 'student' && me) {
